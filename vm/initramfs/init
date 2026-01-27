@@ -39,9 +39,12 @@ mkdir -p /newroot/dev /newroot/tmp /newroot/run /newroot/sandstorm
 # Copy binaries
 cp /bin/busybox /newroot/bin/
 cp /bin/tempest-vm-daemon /newroot/bin/
-cp /bin/tempest-sandbox-launcher /newroot/bin/
-cp /bin/tempest-grain-agent /newroot/bin/ 2>/dev/null || true
 cp /bin/strace /newroot/bin/ 2>/dev/null || true
+
+# Copy tempest binaries to /bin/tempest/ (expected by sandbox-launcher and vm-daemon)
+mkdir -p /newroot/bin/tempest
+cp /bin/tempest/tempest-sandbox-launcher /newroot/bin/tempest/
+cp /bin/tempest/tempest-grain-agent /newroot/bin/tempest/ 2>/dev/null || true
 
 # Create busybox symlinks in new root
 cd /newroot/bin
@@ -101,11 +104,6 @@ fi
 exec /bin/tempest-vm-daemon
 STARTUP_EOF
 chmod +x /newroot/bin/start-daemon.sh
-
-# Create symlinks for sandbox-launcher in expected location
-mkdir -p /newroot/bin/tempest
-ln -sf /bin/tempest-sandbox-launcher /newroot/bin/tempest/tempest-sandbox-launcher
-ln -sf /bin/tempest-grain-agent /newroot/bin/tempest/tempest-grain-agent
 
 # Pivot to new root using switch_root (designed for initramfs)
 echo "Switching to new root..."

@@ -89,7 +89,7 @@ download_kernel() {
     fi
 
     log_info "Extracting kernel..."
-    tar -xf kata.tar.xz
+    tar --no-same-owner -xf kata.tar.xz
 
     # Find and copy the kernel
     local kernel_file
@@ -126,7 +126,7 @@ download_kernel_source() {
 
     curl -L -o "$BUILD_DIR/linux-${KERNEL_VERSION}.tar.xz" "$kernel_url"
     log_info "Extracting kernel source..."
-    tar -xf "$BUILD_DIR/linux-${KERNEL_VERSION}.tar.xz" -C "$BUILD_DIR"
+    tar --no-same-owner -xf "$BUILD_DIR/linux-${KERNEL_VERSION}.tar.xz" -C "$BUILD_DIR"
     rm "$BUILD_DIR/linux-${KERNEL_VERSION}.tar.xz"
 }
 
@@ -187,7 +187,8 @@ download_busybox() {
         log_info "Found $apk_name"
         curl -fL -o busybox.apk "$alpine_url/$apk_name"
         # Extract busybox from the APK (it's a tar.gz with specific structure)
-        tar -xzf busybox.apk bin/busybox.static
+        # Use --no-same-owner to avoid permission issues in Docker mounted volumes
+        tar --no-same-owner -xzf busybox.apk bin/busybox.static
         mv bin/busybox.static busybox
         rm -rf bin busybox.apk .PKGINFO .SIGN.* 2>/dev/null || true
         chmod +x busybox
@@ -244,9 +245,11 @@ build_initramfs() {
     ln -sf ../bin/busybox switch_root
 
     # Copy tempest binaries (Linux builds use -linux suffix)
+    # Binaries go in /bin/tempest/ to match LIBEXECDIR="/bin" + "/tempest" paths
     log_info "Copying tempest binaries..."
+    mkdir -p "$initramfs_dir/bin/tempest"
 
-    # tempest-vm-daemon (runs as init/service in VM)
+    # tempest-vm-daemon (runs as init/service in VM) - stays in /bin for init
     if [[ -f "$PROJECT_ROOT/_build/tempest-vm-daemon-linux" ]]; then
         cp "$PROJECT_ROOT/_build/tempest-vm-daemon-linux" "$initramfs_dir/bin/tempest-vm-daemon"
         chmod +x "$initramfs_dir/bin/tempest-vm-daemon"
@@ -258,21 +261,21 @@ build_initramfs() {
     # tempest-sandbox-launcher (spawns grain processes)
     # This needs to be built for Linux - check if it exists
     if [[ -f "$PROJECT_ROOT/_build/tempest-sandbox-launcher" ]]; then
-        cp "$PROJECT_ROOT/_build/tempest-sandbox-launcher" "$initramfs_dir/bin/"
-        chmod +x "$initramfs_dir/bin/tempest-sandbox-launcher"
+        cp "$PROJECT_ROOT/_build/tempest-sandbox-launcher" "$initramfs_dir/bin/tempest/"
+        chmod +x "$initramfs_dir/bin/tempest/tempest-sandbox-launcher"
     else
         log_warn "tempest-sandbox-launcher not found (Linux build required)"
         log_warn "Creating placeholder - sandbox launching won't work without it"
-        echo '#!/bin/sh' > "$initramfs_dir/bin/tempest-sandbox-launcher"
-        echo 'echo "ERROR: sandbox-launcher not available"' >> "$initramfs_dir/bin/tempest-sandbox-launcher"
-        echo 'exit 1' >> "$initramfs_dir/bin/tempest-sandbox-launcher"
-        chmod +x "$initramfs_dir/bin/tempest-sandbox-launcher"
+        echo '#!/bin/sh' > "$initramfs_dir/bin/tempest/tempest-sandbox-launcher"
+        echo 'echo "ERROR: sandbox-launcher not available"' >> "$initramfs_dir/bin/tempest/tempest-sandbox-launcher"
+        echo 'exit 1' >> "$initramfs_dir/bin/tempest/tempest-sandbox-launcher"
+        chmod +x "$initramfs_dir/bin/tempest/tempest-sandbox-launcher"
     fi
 
     # tempest-grain-agent (runs inside grain sandbox)
     if [[ -f "$PROJECT_ROOT/_build/tempest-grain-agent-linux" ]]; then
-        cp "$PROJECT_ROOT/_build/tempest-grain-agent-linux" "$initramfs_dir/bin/tempest-grain-agent"
-        chmod +x "$initramfs_dir/bin/tempest-grain-agent"
+        cp "$PROJECT_ROOT/_build/tempest-grain-agent-linux" "$initramfs_dir/bin/tempest/tempest-grain-agent"
+        chmod +x "$initramfs_dir/bin/tempest/tempest-grain-agent"
     else
         log_warn "tempest-grain-agent-linux not found"
     fi
@@ -356,6 +359,21 @@ install_vm() {
 clean() {
     log_info "Cleaning VM build artifacts..."
     rm -rf "$BUILD_DIR"
+
+    # Also clean installed VM images
+    local install_dir="/tmp/tempest/libexec/tempest/vm"
+    if [[ -f "$PROJECT_ROOT/config.json" ]]; then
+        local libexecdir
+        libexecdir=$(grep -o '"Libexecdir"[[:space:]]*:[[:space:]]*"[^"]*"' "$PROJECT_ROOT/config.json" | cut -d'"' -f4)
+        if [[ -n "$libexecdir" ]]; then
+            install_dir="$libexecdir/tempest/vm"
+        fi
+    fi
+    if [[ -d "$install_dir" ]]; then
+        log_info "Removing installed VM images from $install_dir..."
+        rm -rf "$install_dir"
+    fi
+
     log_info "Done"
 }
 

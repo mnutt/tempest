@@ -20,8 +20,9 @@ import (
 )
 
 const (
-	goVersion        = "1.25.3"
-	goExpectedSha256 = "0335f314b6e7bfe08c3d0cfaa7c19db961b7b99fb20be62b0a826c992ad14e0f"
+	goVersion         = "1.25.6"
+	goExpectedSha256  = "f022b6aad78e362bcba9b0b94d09ad58c5a70c6ba3b7582905fababf5fe0181a"  // linux-amd64
+	goExpectedSha256Darwin = "984521ae978a5377c7d782fd2dd953291840d7d3d0bd95781a1f32f16d94a006"  // darwin-arm64
 	downloadUserAgent = "tempest-bootstrap"
 )
 
@@ -30,6 +31,12 @@ type Bootstrap mg.Namespace
 
 // Go downloads and installs the Go toolchain to ./toolchain
 func (Bootstrap) Go() error {
+	// Check platform support early
+	platform := runtime.GOOS + "-" + runtime.GOARCH
+	if platform != "linux-amd64" && platform != "darwin-arm64" {
+		return fmt.Errorf("unsupported platform: %s. Only linux-amd64 and darwin-arm64 are supported", platform)
+	}
+
 	goInstallDir := filepath.Join(toolchainDir, fmt.Sprintf("go-%s", goVersion))
 	goExecutable := filepath.Join(goInstallDir, "bin", "go")
 
@@ -69,16 +76,22 @@ func (Bootstrap) Go() error {
 		}
 	}
 
-	// Verify SHA256 (only for known platform)
-	if runtime.GOOS == "linux" && runtime.GOARCH == "amd64" {
-		if err := verifySha256(goExpectedSha256, downloadPath); err != nil {
-			os.Remove(downloadPath)
-			return fmt.Errorf("SHA256 verification failed: %w", err)
-		}
-		fmt.Println("SHA256 verified")
-	} else {
-		fmt.Printf("Warning: SHA256 verification skipped for %s/%s\n", runtime.GOOS, runtime.GOARCH)
+	// Verify SHA256
+	var expectedSha256 string
+	switch runtime.GOOS + "-" + runtime.GOARCH {
+	case "linux-amd64":
+		expectedSha256 = goExpectedSha256
+	case "darwin-arm64":
+		expectedSha256 = goExpectedSha256Darwin
+	default:
+		return fmt.Errorf("unsupported platform: %s/%s. Only linux-amd64 and darwin-arm64 are supported", runtime.GOOS, runtime.GOARCH)
 	}
+
+	if err := verifySha256(expectedSha256, downloadPath); err != nil {
+		os.Remove(downloadPath)
+		return fmt.Errorf("SHA256 verification failed: %w", err)
+	}
+	fmt.Println("SHA256 verified")
 
 	// Extract
 	fmt.Printf("Extracting to %s...\n", goInstallDir)

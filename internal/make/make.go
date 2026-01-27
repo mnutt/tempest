@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -115,9 +116,18 @@ const (
 func (c Config) CSrc() string {
 	return fmt.Sprintf(`
 #pragma once
+
+#ifndef PREFIX
 #define PREFIX %q
+#endif
+
+#ifndef LIBEXECDIR
 #define LIBEXECDIR %q
+#endif
+
+#ifndef LOCALSTATEDIR
 #define LOCALSTATEDIR %q
+#endif
 `,
 		c.Prefix,
 		c.Libexecdir,
@@ -163,6 +173,10 @@ func installExe(cfg Config, exe, dir, caps string) {
 }
 
 func buildC() error {
+	if runtime.GOOS != "linux" {
+		log.Println("Skipping C build (sandbox launcher is Linux-only)")
+		return nil
+	}
 	log.Println("Building C executable")
 	return runInDir("c", "make")
 }
@@ -190,9 +204,47 @@ func buildConfig(r *BuildRecord) {
 	}
 }
 
+const (
+	capnpVersion   = "1.1.0"
+	goCapnpVersion = "3.1.0-alpha.1"
+	goVersion      = "1.25.6"
+	toolchainDir   = "toolchain"
+)
+
+// getToolchainGo returns the path to the toolchain Go executable
+func getToolchainGo() string {
+	goPath := filepath.Join(toolchainDir, "go-"+goVersion, "bin", "go")
+	if _, err := os.Stat(goPath); err == nil {
+		return goPath
+	}
+	return "go" // fall back to system
+}
+
+// getToolchainCapnp returns the path to the toolchain capnp executable
+func getToolchainCapnp() string {
+	capnpPath := filepath.Join(toolchainDir, "capnp-"+capnpVersion, "capnp")
+	if _, err := os.Stat(capnpPath); err == nil {
+		return capnpPath
+	}
+	return "capnp" // fall back to system
+}
+
+// getToolchainCapnpcGo returns the path to the toolchain capnpc-go executable
+func getToolchainCapnpcGo() string {
+	capnpcGoPath := filepath.Join(toolchainDir, "go-capnp-"+goCapnpVersion, "capnpc-go", "capnpc-go")
+	if absPath, err := filepath.Abs(capnpcGoPath); err == nil {
+		if _, err := os.Stat(absPath); err == nil {
+			return absPath
+		}
+	}
+	return "capnpc-go" // fall back to system
+}
+
 func buildCapnp(r *BuildRecord) {
 	log.Println("Compiling capnp schema")
 	c := readConfig()
+	capnpExe := getToolchainCapnp()
+	capnpcGoExe := getToolchainCapnpcGo()
 	dirs := []string{
 		"capnp",
 		"internal/capnp",
@@ -206,7 +258,7 @@ func buildCapnp(r *BuildRecord) {
 			dir := file[:len(file)-len(".capnp")]
 			err := os.MkdirAll(dir, 0755)
 			chkfatal(err)
-			cmd := exec.Command("capnp",
+			cmd := exec.Command(capnpExe,
 				"compile",
 				"-o-",
 				"--src-prefix="+d+"/",
@@ -224,7 +276,7 @@ func buildCapnp(r *BuildRecord) {
 				if !bytes.Equal(hash[:], oldSig.Hash) {
 					log.Printf("Generating go code for %q", file)
 					chkfatal(os.WriteFile(cgrPath, cgr, 0644))
-					cmd := exec.Command("capnpc-go")
+					cmd := exec.Command(capnpcGoExe)
 					cmd.Dir = dir
 					cmd.Stdin, err = os.Open(cgrPath)
 					chkfatal(err)
@@ -259,18 +311,26 @@ func findWasmExecJs(cfg Config) (string, error) {
 		}
 		return "", fmt.Errorf("failed to find wasm_exec.js")
 	}
-	// Regular go toolchain
-	cmd := exec.Command("go", "env", "GOROOT")
+	// Regular go toolchain - use toolchain Go, not system Go
+	goExe := getToolchainGo()
+	cmd := exec.Command(goExe, "env", "GOROOT")
 	cmd.Env = append(cmd.Env, os.Environ()...)
 	goroot, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("could not determine GOROOT: %v", err)
 	}
-	path := strings.TrimSpace(string(goroot)) + "/misc/wasm/wasm_exec.js"
-	if _, err := os.Stat(path); err != nil {
-		return "", fmt.Errorf("could not stat %q: %v", path, err)
+	gorootStr := strings.TrimSpace(string(goroot))
+	// Try both locations: Go 1.25+ uses lib/wasm, older versions use misc/wasm
+	candidates := []string{
+		gorootStr + "/lib/wasm/wasm_exec.js",
+		gorootStr + "/misc/wasm/wasm_exec.js",
 	}
-	return path, nil
+	for _, path := range candidates {
+		if _, err := os.Stat(path); err == nil {
+			return path, nil
+		}
+	}
+	return "", fmt.Errorf("could not find wasm_exec.js in %s/lib/wasm or %s/misc/wasm", gorootStr, gorootStr)
 }
 
 func buildWebui(r *BuildRecord, cfg Config) error {
@@ -300,7 +360,8 @@ func buildWebui(r *BuildRecord, cfg Config) error {
 		}
 	} else {
 		// Use the standard go toolchain.
-		cmd := exec.Command("go", "build", "-o", tmpPath, srcDir)
+		goExe := getToolchainGo()
+		cmd := exec.Command(goExe, "build", "-o", tmpPath, srcDir)
 		cmd.Env = append(cmd.Env, os.Environ()...)
 		cmd.Env = append(cmd.Env, "GOOS=js", "GOARCH=wasm")
 		err := withMyOuts(cmd).Run()
@@ -355,18 +416,59 @@ func buildGo(r *BuildRecord) error {
 			return err
 		}
 	}
+
+	// Cross-compile Linux binaries (for VM)
+	linuxExes := []string{"tempest-vm-daemon", "tempest-grain-agent"}
+	for _, name := range linuxExes {
+		err = compileLinuxExe(name)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
 func compileGoExe(name string, static bool) error {
 	log.Printf("Compiling go executable %q (static = %v)", name, static)
-	cmd := exec.Command("go", "build", "-v", "-o", "_build/"+name, "./cmd/"+name)
+	goExe := getToolchainGo()
+	cmd := exec.Command(goExe, "build", "-o", "_build/"+name, "./cmd/"+name)
 	cmd.Env = append(cmd.Env, os.Environ()...)
 	if static {
 		cmd.Env = append(cmd.Env, "CGO_ENABLED=0")
 	} else {
 		cmd.Env = append(cmd.Env, "CGO_ENABLED=1")
 	}
+	if err := withMyOuts(cmd).Run(); err != nil {
+		return err
+	}
+
+	// On macOS, sign binaries that use Virtualization framework
+	if runtime.GOOS == "darwin" && name == "tempest" {
+		entitlements := "./cmd/tempest/tempest.entitlements"
+		if _, err := os.Stat(entitlements); err == nil {
+			log.Printf("Signing %q with entitlements for Virtualization framework", name)
+			signCmd := exec.Command("codesign", "--sign", "-", "--entitlements", entitlements, "--force", "_build/"+name)
+			if err := withMyOuts(signCmd).Run(); err != nil {
+				return fmt.Errorf("failed to sign %s: %w", name, err)
+			}
+		}
+	}
+	return nil
+}
+
+// compileLinuxExe cross-compiles a Go executable for Linux (static)
+// Output is saved with -linux suffix to avoid overwriting macOS binaries
+func compileLinuxExe(name string) error {
+	// Use same architecture as host for VM use cases
+	goarch := runtime.GOARCH
+
+	log.Printf("Compiling Linux executable %q (arch=%s)", name, goarch)
+	goExe := getToolchainGo()
+	outputName := "_build/" + name + "-linux"
+	cmd := exec.Command(goExe, "build", "-o", outputName, "./cmd/"+name)
+	cmd.Env = append(cmd.Env, os.Environ()...)
+	cmd.Env = append(cmd.Env, "CGO_ENABLED=0", "GOOS=linux", "GOARCH="+goarch)
 	return withMyOuts(cmd).Run()
 }
 

@@ -16,18 +16,10 @@ jobs:
         with:
           go-version: '1.25'
 
-      - name: Generate config
+      - name: Configure and build
         run: |
-          mkdir -p internal/config
-          cat > internal/config/config.go << 'EOF'
-          package config
-
-          const (
-            Prefix = "/tmp/tempest"
-            Libexecdir = "/tmp/tempest/libexec"
-            Localstatedir = "/tmp/tempest/var/lib"
-          )
-          EOF
+          ./configure --prefix=/tmp/tempest
+          make build
 
       - name: Run tests
         run: |

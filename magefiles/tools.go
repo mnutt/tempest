@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/magefile/mage/mg"
 	"github.com/magefile/mage/sh"
@@ -57,7 +58,6 @@ func (Bootstrap) Flex() error {
 func (Bootstrap) CapnProto() error {
 	mg.Deps(Bootstrap.Go)
 
-	// Note: directory uses "capnp-" prefix, not "capnproto-"
 	capnpDir := filepath.Join(toolchainDir, fmt.Sprintf("capnp-%s", capnpVersion))
 	capnpExe := filepath.Join(capnpDir, "capnp")
 
@@ -87,8 +87,13 @@ func (Bootstrap) GoCapnp() error {
 	return runBuildTool("bootstrap-go-capnp")
 }
 
-// BpfAsm builds bpf_asm from Linux kernel source
+// BpfAsm builds bpf_asm from Linux kernel source (Linux only)
 func (Bootstrap) BpfAsm() error {
+	if runtime.GOOS != "linux" {
+		fmt.Println("Skipping bpf_asm (Linux only)")
+		return nil
+	}
+
 	mg.Deps(Bootstrap.Go, Bootstrap.Bison, Bootstrap.Flex)
 
 	bpfAsmDir := filepath.Join(toolchainDir, fmt.Sprintf("bpf_asm-%s", bpfAsmVersion))

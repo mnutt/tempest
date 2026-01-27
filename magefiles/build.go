@@ -564,7 +564,6 @@ func stampFile(path string) (FileStamp, error) {
 
 // getToolchainCapnp returns the path to the toolchain capnp executable
 func getToolchainCapnp() string {
-	// Note: directory uses "capnp-" prefix
 	capnpPath := filepath.Join(toolchainDir, fmt.Sprintf("capnp-%s", capnpVersion), "capnp")
 	if _, err := os.Stat(capnpPath); err == nil {
 		return capnpPath

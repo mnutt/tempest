@@ -25,7 +25,7 @@ BISON := $(TOOLCHAIN_DIR)/bison-$(BISON_VERSION)/tests/bison
 BPF_ASM_VERSION := 6.13.8
 BPF_ASM := $(TOOLCHAIN_DIR)/bpf_asm-$(BPF_ASM_VERSION)/tools/bpf/bpf_asm
 CAPNP_VERSION := 1.1.0
-CAPNP := $(TOOLCHAIN_DIR)/capnproto-$(CAPNP_VERSION)/capnp
+CAPNP := $(TOOLCHAIN_DIR)/capnp-$(CAPNP_VERSION)/capnp
 FLEX_VERSION := 2.6.4
 FLEX := $(TOOLCHAIN_DIR)/flex-$(FLEX_VERSION)/src/flex
 GO_VERSION := 1.25.6
@@ -54,16 +54,27 @@ TINYGO := $(TOOLCHAIN_DIR)/tinygo-$(TINYGO_VERSION)/bin/tinygo
 help:
 	@echo "Usage: make <target>"
 	@echo
-	@echo Targets:
-	@echo "    build        Build the project"
-	@echo "    check        Run project tests"
-	@echo "    clean        Remove build artifacts"
-	@echo "    format       Format the source files"
-	@echo "    lint         Run the linters"
-	@echo "    nuke         Remove build artifacts and configuration"
-	@echo "    toolchain    Download and set up the toolchain"
-	@echo "    update-deps  Update depedencies"
+	@echo "Targets:"
+	@echo "    build          Build the project"
+	@echo "    check          Run project tests"
+	@echo "    clean          Remove build artifacts"
+	@echo "    format         Format the source files"
+	@echo "    lint           Run the linters"
+	@echo "    nuke           Remove build artifacts and configuration"
+	@echo "    toolchain      Download and set up the toolchain"
+	@echo "    update-deps    Update dependencies"
 	@echo
+ifeq ($(shell uname -s),Darwin)
+	@echo "VM Targets (macOS):"
+	@echo "    vm-build       Build VM image (kernel + initramfs)"
+	@echo "    vm-download    Download pre-built VM images"
+	@echo "    vm-docker      Build VM image using Docker"
+	@echo "    vm-initramfs   Build only the initramfs"
+	@echo "    vm-install     Install VM images to libexec"
+	@echo "    vm-clean       Remove VM build artifacts"
+	@echo "    vm-quickstart  Build initramfs and install"
+	@echo
+endif
 
 .PHONY: all
 all: build
@@ -228,3 +239,11 @@ update-deps:
 	go get zenhack.net/go/websocket-capnp
 	# and clean up:
 	go mod tidy
+
+#
+# VM Targets (macOS only)
+#
+
+ifeq ($(shell uname -s),Darwin)
+include vm/vm.mk
+endif

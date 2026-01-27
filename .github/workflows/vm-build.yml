@@ -2,10 +2,13 @@ name: Build VM Images
 
 on:
   push:
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 jobs:
   build-vm:
+    # VM is only needed on Apple Silicon Macs - on Linux you run containers directly
     runs-on: ubuntu-24.04-arm
 
     steps:
@@ -18,6 +21,7 @@ jobs:
 
       - name: Generate config
         run: |
+          mkdir -p internal/config
           cat > internal/config/config.go << 'EOF'
           package config
 
@@ -27,7 +31,6 @@ jobs:
             Localstatedir = "/tmp/tempest/var/lib"
           )
           EOF
-          sed -i 's/^          //' internal/config/config.go
 
           cat > c/config.h << 'EOF'
           #pragma once
@@ -44,7 +47,6 @@ jobs:
           #define LOCALSTATEDIR "/tmp/tempest/var/lib"
           #endif
           EOF
-          sed -i 's/^          //' c/config.h
 
       - name: Build Go binaries for Linux
         run: |
@@ -54,11 +56,12 @@ jobs:
       - name: Build sandbox-launcher
         run: |
           mkdir -p _build
+
           # Generate constants.h
           cc -o _build/gen-clean-h c/gen-clean-h.c
           _build/gen-clean-h > _build/constants.h
 
-          # Get bpf_asm tool
+          # Get bpf_asm tool from Linux source
           git clone --depth 1 https://github.com/torvalds/linux.git /tmp/linux-src
           cd /tmp/linux-src/tools/bpf
           make bpf_asm
@@ -66,39 +69,32 @@ jobs:
           cd -
 
           # Preprocess and assemble BPF filter
-          # Enable TEMPEST_ROSETTA_COMPAT for Rosetta x86_64 translation support
           cpp -I _build -DTEMPEST_ROSETTA_COMPAT c/filter.s -o _build/filter_preproc.s
           bpf_asm -c < _build/filter_preproc.s > _build/bpf_filter.h
 
-          # Compile sandbox-launcher with TEMPEST_ROSETTA_COMPAT for Rosetta support
+          # Compile sandbox-launcher for VM (LIBEXECDIR=/bin, LOCALSTATEDIR="")
           cc -I _build -std=c11 -Wall -Wextra -static \
               -DLIBEXECDIR='"/bin"' -DLOCALSTATEDIR='""' -DTEMPEST_ROSETTA_COMPAT \
               -c -o c/sandbox-launcher.o c/sandbox-launcher.c
           cc -static -o _build/tempest-sandbox-launcher c/sandbox-launcher.o
 
-      - name: Download kernel
-        run: ./vm/build.sh download-kernel
-
       - name: Build initramfs
         run: ./vm/build.sh initramfs
 
-      - name: Package VM images
+      - name: Package initrd
         run: |
           mkdir -p dist
-          cp _build/vm/output/kernel dist/kernel
-          cp _build/vm/output/initrd dist/initrd
-          cd dist
-          tar -czvf tempest-vm-arm64.tar.gz kernel initrd
+          cp _build/vm/output/initrd dist/tempest-vm-arm64-initrd.gz
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: vm-images
-          path: dist/tempest-vm-arm64.tar.gz
+          name: vm-initrd-arm64
+          path: dist/tempest-vm-arm64-initrd.gz
 
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
-          files: dist/tempest-vm-arm64.tar.gz
+          files: dist/tempest-vm-arm64-initrd.gz
           generate_release_notes: true
