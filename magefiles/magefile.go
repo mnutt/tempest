@@ -1,19 +1,6 @@
 //go:build mage
 
-// Tempest Build System
-//
-// This is a Mage-based build system for Tempest. It replaces the previous
-// Makefile + shell scripts with pure Go build logic.
-//
-// Usage:
-//
-//	mage build     - Build the entire project
-//	mage clean     - Remove build artifacts
-//	mage nuke      - Remove build artifacts and toolchain
-//	mage test      - Run tests
-//	mage install   - Install binaries
-//	mage dev       - Install and run tempest
-//	mage -l        - List all targets
+// Tempest build system. Run 'mage -l' to list targets, 'mage build' to compile.
 package main
 
 import (
