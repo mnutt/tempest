@@ -285,7 +285,8 @@ func (tx Tx) NewSharingToken(
 }
 
 // CredentialAccount returns the account ID associated with the credential.
-// If there is no existing account, one is created with the visitor role.
+// If there is no existing account, one is created. Dev credentials get the
+// user role; other credentials get the visitor role by default.
 func (tx Tx) CredentialAccount(cred types.Credential) (types.AccountID, error) {
 	accountID, err := exn.Try(func(throw exn.Thrower) types.AccountID {
 		row := tx.sqlTx.QueryRow(
@@ -298,15 +299,22 @@ func (tx Tx) CredentialAccount(cred types.Credential) (types.AccountID, error) {
 			err = nil
 			// No account; create one and link it to the credential:
 			accountID = types.AccountID(tokenutil.Gen128Base64())
+			role := types.RoleVisitor
+			if cred.Type == "dev" {
+				role = types.RoleUser
+			}
+			fmt.Printf("CredentialAccount: creating new account for cred=%+v with role=%s\n", cred, role)
 			throw(tx.AddAccount(NewAccount{
 				ID:   accountID,
-				Role: types.RoleVisitor,
+				Role: role,
 			}))
 			throw(tx.AddCredential(NewCredential{
 				AccountID:  accountID,
 				Login:      true,
 				Credential: cred,
 			}))
+		} else {
+			fmt.Printf("CredentialAccount: found existing account %s for cred=%+v\n", accountID, cred)
 		}
 		throw(err)
 		return accountID
