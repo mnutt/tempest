@@ -12,7 +12,7 @@ import (
 
 func main() {
 	output := flag.String("output", "", "Output path for sandstorm-manifest")
-	binary := flag.String("binary", "/tmp/hello-x86_64", "Path to binary to run")
+	binary := flag.String("binary", "/bin/test-app", "Path to binary to run")
 	title := flag.String("title", "Test App", "App title")
 	flag.Parse()
 

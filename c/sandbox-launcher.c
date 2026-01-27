@@ -140,17 +140,12 @@ static struct sock_fprog seccomp_fprog = (struct sock_fprog) {
 };
 
 int main(int argc, char **argv) {
-	fprintf(stderr, "DEBUG sandbox-launcher: starting (argc=%d)\n", argc);
-	fflush(stderr);
-
 	REQUIRE(argc >= 3);
 	require_valid_pkg_id(argv[1]);
 	require_valid_grain_id(argv[2]);
 
 	const char *image_id = argv[1];
 	const char *sandbox_id = argv[2];
-	fprintf(stderr, "DEBUG sandbox-launcher: image=%s grain=%s\n", image_id, sandbox_id);
-	fflush(stderr);
 
 	/* Get an fd for the agent executable, which we'll execveat() once we're in the sandbox. */
 	int agent_fd = open(AGENT_PATH, O_RDONLY);
@@ -242,57 +237,11 @@ int main(int argc, char **argv) {
 	 * We use /tmp/lima-rosetta since /tmp is guaranteed to exist (it's a tmpfs we just mounted).
 	 * Try bind mount from VM's existing mount first - this preserves the virtiofs ioctl context.
 	 * Fall back to direct virtiofs mount if bind mount fails. */
-	fprintf(stderr, "DEBUG: Attempting Rosetta mount, CHROOT_MNT=%s\n", CHROOT_MNT);
-	fflush(stderr);
-	fprintf(stderr, "DEBUG: Checking if /tmp/lima-rosetta exists...\n");
-	fflush(stderr);
-	{
-		struct stat st;
-		if (stat("/tmp/lima-rosetta", &st) == 0) {
-			fprintf(stderr, "DEBUG: /tmp/lima-rosetta exists (mode=%o)\n", st.st_mode);
-		} else {
-			fprintf(stderr, "DEBUG: /tmp/lima-rosetta does NOT exist: %s\n", strerror(errno));
-		}
-		if (stat("/tmp/lima-rosetta/rosetta", &st) == 0) {
-			fprintf(stderr, "DEBUG: /tmp/lima-rosetta/rosetta exists\n");
-		} else {
-			fprintf(stderr, "DEBUG: /tmp/lima-rosetta/rosetta does NOT exist: %s\n", strerror(errno));
-		}
-	}
 	if (mkdir(CHROOT_MNT "/tmp/lima-rosetta", 0755) == 0) {
-		fprintf(stderr, "DEBUG: Created %s/tmp/lima-rosetta\n", CHROOT_MNT);
 		/* Try bind mount from existing VM mount first */
-		fprintf(stderr, "DEBUG: Attempting bind mount from /tmp/lima-rosetta to %s/tmp/lima-rosetta\n", CHROOT_MNT);
 		if (mount("/tmp/lima-rosetta", CHROOT_MNT "/tmp/lima-rosetta", "", MS_BIND, "") != 0) {
-			fprintf(stderr, "Warning: Bind mount of Rosetta failed (%s), trying virtiofs\n", strerror(errno));
 			/* Fall back to direct virtiofs mount */
-			if (mount("rosetta", CHROOT_MNT "/tmp/lima-rosetta", "virtiofs", 0, "") != 0) {
-				fprintf(stderr, "Warning: Failed to mount Rosetta virtiofs: %s (errno=%d)\n", strerror(errno), errno);
-			} else {
-				fprintf(stderr, "DEBUG: Mounted Rosetta via virtiofs\n");
-			}
-		} else {
-			fprintf(stderr, "DEBUG: Bind mount of Rosetta succeeded!\n");
-		}
-	} else {
-		fprintf(stderr, "Warning: Failed to create /tmp/lima-rosetta: %s (errno=%d)\n", strerror(errno), errno);
-	}
-
-	/* Copy hello-x86_64 into sandbox for binfmt_misc testing (if it exists) */
-	{
-		int src_fd = open("/bin/hello-x86_64", O_RDONLY);
-		if (src_fd >= 0) {
-			int dst_fd = open(CHROOT_MNT "/tmp/hello-x86_64", O_WRONLY|O_CREAT|O_TRUNC, 0755);
-			if (dst_fd >= 0) {
-				char buf[4096];
-				ssize_t n;
-				while ((n = read(src_fd, buf, sizeof(buf))) > 0) {
-					write(dst_fd, buf, n);
-				}
-				close(dst_fd);
-				fprintf(stderr, "DEBUG: Copied hello-x86_64 to sandbox for testing\n");
-			}
-			close(src_fd);
+			mount("rosetta", CHROOT_MNT "/tmp/lima-rosetta", "virtiofs", 0, "");
 		}
 	}
 
@@ -363,7 +312,6 @@ int main(int argc, char **argv) {
 
 	/* Install the seccomp filter: */
 	REQUIRE(syscall(SYS_seccomp, SECCOMP_SET_MODE_FILTER, 0, &seccomp_fprog) == 0);
-	fprintf(stderr, "DEBUG: Seccomp filter installed\n");
 
 	pid_t pid = fork();
 	REQUIRE(pid != -1);
@@ -446,9 +394,8 @@ int main(int argc, char **argv) {
 		/* We're the child. Reset the signal mask and launch the agent. */
 		REQUIRE(sigprocmask(SIG_UNBLOCK, &set, 0) == 0);
 
-		/* TODO: document what's going on here. */
+		/* Start a new session so we can be a proper init. */
 		REQUIRE(setsid() != -1);
-		//REQUIRE(setpgid(0, 0) == 0);
 
 		// Re-use the arguments in argv after the ones we used. Swap out the program
 		// name.
