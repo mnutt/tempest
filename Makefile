@@ -28,7 +28,7 @@ CAPNP_VERSION := 1.1.0
 CAPNP := $(TOOLCHAIN_DIR)/capnproto-$(CAPNP_VERSION)/capnp
 FLEX_VERSION := 2.6.4
 FLEX := $(TOOLCHAIN_DIR)/flex-$(FLEX_VERSION)/src/flex
-GO_VERSION := 1.25.3
+GO_VERSION := 1.25.6
 GO := $(TOOLCHAIN_DIR)/go-$(GO_VERSION)/bin/go
 GO_BUILD := $(GO) build
 GO_GET := $(GO) get
@@ -176,8 +176,12 @@ $(BISON): $(BUILDTOOL)
 	$(BUILDTOOL) bootstrap-bison
 
 $(BPF_ASM): $(BISON) $(BUILDTOOL) $(FLEX)
-	@echo Building bpf_asm from Linux $(BPF_ASM_VERSION)
-	$(BUILDTOOL) bootstrap-bpf_asm
+	@if [ "$$(uname -s)" != "Linux" ]; then \
+		echo "Skipping bpf_asm (Linux only)"; \
+	else \
+		echo "Building bpf_asm from Linux $(BPF_ASM_VERSION)"; \
+		$(BUILDTOOL) bootstrap-bpf_asm; \
+	fi
 
 $(BUILDTOOL): $(BUILDTOOL_MAIN) $(BUILDTOOL_PACKAGE) $(GO) $(GOPATH_DIR)
 	GOPATH="$(GOPATH_DIR)" $(GO_GET) ./internal/build-tool
