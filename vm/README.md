@@ -89,6 +89,13 @@ The kernel config (`kernel.config`) is minimal and includes only:
 - **seccomp** - Syscall filtering for security
 - **cgroups** - Resource limits
 
+### Seccomp Filter
+
+The sandbox-launcher uses a seccomp BPF filter to restrict syscalls. For VM builds,
+the filter is compiled with `-DTEMPEST_ROSETTA_COMPAT` to allow ioctls required for
+Rosetta x86_64 binary translation on Apple Silicon. Standard Linux builds do not
+include these ioctls, keeping the attack surface minimal.
+
 Disabled:
 - All hardware drivers (no PCI devices, USB, etc.)
 - Networking stack (only Unix sockets and vsock)

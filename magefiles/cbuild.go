@@ -100,7 +100,10 @@ func generateBpfFilter() error {
 	// Step 3: Run cpp to preprocess filter.s
 	filterPreproc := filepath.Join(buildDir, "filter_preproc.s")
 	fmt.Println("Preprocessing filter.s")
-	cmd := exec.Command("cpp", "-I", buildDir, "c/filter.s", "-o", filterPreproc)
+	cppArgs := []string{"-I", buildDir}
+	cppArgs = append(cppArgs, getCPPFlags()...)
+	cppArgs = append(cppArgs, "c/filter.s", "-o", filterPreproc)
+	cmd := exec.Command("cpp", cppArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -145,6 +148,14 @@ func getCC() string {
 func getCFlags() []string {
 	if cflags := os.Getenv("CFLAGS"); cflags != "" {
 		return strings.Fields(cflags)
+	}
+	return nil
+}
+
+// getCPPFlags returns the C preprocessor flags
+func getCPPFlags() []string {
+	if cppflags := os.Getenv("CPPFLAGS"); cppflags != "" {
+		return strings.Fields(cppflags)
 	}
 	return nil
 }

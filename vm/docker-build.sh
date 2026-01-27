@@ -15,7 +15,8 @@ cc -o _build/gen-clean-h c/gen-clean-h.c
 _build/gen-clean-h > _build/constants.h
 
 # Preprocess and assemble BPF filter
-cpp -I _build c/filter.s -o _build/filter_preproc.s
+# Enable TEMPEST_ROSETTA_COMPAT for VM builds to allow Rosetta x86_64 translation ioctls
+cpp -I _build -DTEMPEST_ROSETTA_COMPAT c/filter.s -o _build/filter_preproc.s
 
 # Use pre-built bpf_asm from the Docker image
 /opt/bpf_build/bpf_asm -c < _build/filter_preproc.s > _build/bpf_filter.h
