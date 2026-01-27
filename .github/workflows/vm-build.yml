@@ -1,0 +1,103 @@
+name: Build VM Images
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build-vm:
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Generate config
+        run: |
+          cat > internal/config/config.go << 'EOF'
+          package config
+
+          const (
+            Prefix = "/tmp/tempest"
+            Libexecdir = "/tmp/tempest/libexec"
+            Localstatedir = "/tmp/tempest/var/lib"
+          )
+          EOF
+          sed -i 's/^          //' internal/config/config.go
+
+          cat > c/config.h << 'EOF'
+          #pragma once
+
+          #ifndef PREFIX
+          #define PREFIX "/tmp/tempest"
+          #endif
+
+          #ifndef LIBEXECDIR
+          #define LIBEXECDIR "/tmp/tempest/libexec"
+          #endif
+
+          #ifndef LOCALSTATEDIR
+          #define LOCALSTATEDIR "/tmp/tempest/var/lib"
+          #endif
+          EOF
+          sed -i 's/^          //' c/config.h
+
+      - name: Build Go binaries for Linux
+        run: |
+          GOOS=linux GOARCH=arm64 go build -o _build/tempest-vm-daemon-linux ./cmd/tempest-vm-daemon
+          GOOS=linux GOARCH=arm64 go build -o _build/tempest-grain-agent-linux ./cmd/tempest-grain-agent
+
+      - name: Build sandbox-launcher
+        run: |
+          mkdir -p _build
+          # Generate constants.h
+          cc -o _build/gen-clean-h c/gen-clean-h.c
+          _build/gen-clean-h > _build/constants.h
+
+          # Get bpf_asm tool
+          git clone --depth 1 https://github.com/torvalds/linux.git /tmp/linux-src
+          cd /tmp/linux-src/tools/bpf
+          make bpf_asm
+          sudo cp bpf_asm /usr/local/bin/
+          cd -
+
+          # Preprocess and assemble BPF filter
+          cpp -I _build c/filter.s -o _build/filter_preproc.s
+          bpf_asm -c < _build/filter_preproc.s > _build/bpf_filter.h
+
+          # Compile sandbox-launcher
+          cc -I _build -std=c11 -Wall -Wextra -static \
+              -DLIBEXECDIR='"/bin"' -DLOCALSTATEDIR='""' \
+              -c -o c/sandbox-launcher.o c/sandbox-launcher.c
+          cc -static -o _build/tempest-sandbox-launcher c/sandbox-launcher.o
+
+      - name: Download kernel
+        run: ./vm/build.sh download-kernel
+
+      - name: Build initramfs
+        run: ./vm/build.sh initramfs
+
+      - name: Package VM images
+        run: |
+          mkdir -p dist
+          cp _build/vm/output/kernel dist/kernel
+          cp _build/vm/output/initrd dist/initrd
+          cd dist
+          tar -czvf tempest-vm-arm64.tar.gz kernel initrd
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: vm-images
+          path: dist/tempest-vm-arm64.tar.gz
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/tempest-vm-arm64.tar.gz
+          generate_release_notes: true

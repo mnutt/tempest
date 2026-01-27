@@ -39,7 +39,14 @@ docker run --rm -v "$(pwd):/src" -w /src ubuntu:22.04 bash -c '
 
 ### Option 3: Use pre-built images
 
-Download pre-built kernel and initrd from releases (when available).
+Download pre-built kernel and initrd from [GitHub Releases](https://github.com/mnutt/tempest/releases):
+
+```bash
+curl -L -o tempest-vm.tar.gz https://github.com/mnutt/tempest/releases/latest/download/tempest-vm-arm64.tar.gz
+tar -xzf tempest-vm.tar.gz
+mkdir -p /tmp/tempest/libexec/tempest/vm
+mv kernel initrd /tmp/tempest/libexec/tempest/vm/
+```
 
 ## Build Commands
 
@@ -132,6 +139,13 @@ The host shares two directories with the VM:
 | `packages` | `{localstatedir}/sandstorm/apps` | `/packages` | read-only |
 | `grains` | `{localstatedir}/sandstorm/grains` | `/grains` | read-write |
 
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TEMPEST_VM_MEMORY_MB` | 1024 | VM memory in megabytes |
+| `TEMPEST_VM_CPU_COUNT` | 2 | Number of vCPUs |
+
 ## Troubleshooting
 
 ### Kernel build fails
@@ -183,8 +197,8 @@ mage build
 
 ## Future Improvements
 
-- [ ] ARM64 seccomp filter for native Apple Silicon support
-- [ ] Pre-built kernel/initrd in releases
-- [ ] Rosetta integration for x86_64 grains on ARM64
-- [ ] Smaller kernel config (further reduce boot time)
-- [ ] Memory/CPU configuration via environment variables
+- [x] ARM64 seccomp filter for native Apple Silicon support
+- [x] Pre-built kernel/initrd in releases (GitHub Actions workflow)
+- [x] Rosetta integration for x86_64 grains on ARM64
+- [x] Minimal kernel config (disabled hardware, networking, graphics, etc.)
+- [x] Memory/CPU configuration via environment variables (TEMPEST_VM_MEMORY_MB, TEMPEST_VM_CPU_COUNT)

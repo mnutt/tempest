@@ -1,5 +1,10 @@
 package config
 
+import (
+	"os"
+	"strconv"
+)
+
 // ContainerBackendType identifies the type of container backend to use.
 type ContainerBackendType string
 
@@ -38,12 +43,29 @@ type ContainerConfig struct {
 }
 
 // DefaultContainerConfig returns the default container configuration.
+// VM memory and CPU can be overridden via environment variables:
+//   - TEMPEST_VM_MEMORY_MB (default: 1024)
+//   - TEMPEST_VM_CPU_COUNT (default: 2)
 func DefaultContainerConfig() ContainerConfig {
+	memoryMB := uint64(1024)
+	if v := os.Getenv("TEMPEST_VM_MEMORY_MB"); v != "" {
+		if n, err := strconv.ParseUint(v, 10, 64); err == nil {
+			memoryMB = n
+		}
+	}
+
+	cpuCount := uint(2)
+	if v := os.Getenv("TEMPEST_VM_CPU_COUNT"); v != "" {
+		if n, err := strconv.ParseUint(v, 10, 32); err == nil {
+			cpuCount = uint(n)
+		}
+	}
+
 	return ContainerConfig{
 		Backend:      BackendAuto,
 		VMKernelPath: Libexecdir + "/tempest/vm/kernel",
 		VMInitrdPath: Libexecdir + "/tempest/vm/initrd",
-		VMMemoryMB:   1024,
-		VMCPUCount:   2,
+		VMMemoryMB:   memoryMB,
+		VMCPUCount:   cpuCount,
 	}
 }
