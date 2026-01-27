@@ -174,14 +174,21 @@ download_busybox() {
 
     local busybox_url
     if [[ "$runtime_arch" == "aarch64" || "$runtime_arch" == "arm64" ]]; then
-        # ARM64 static busybox from Alpine
-        busybox_url="https://dl-cdn.alpinelinux.org/alpine/v3.21/main/aarch64/busybox-static-1.37.0-r12.apk"
+        # ARM64 static busybox from Alpine - find latest version dynamically
         log_info "Downloading ARM64 busybox from Alpine..."
-        curl -L -o "$BUILD_DIR/busybox.apk" "$busybox_url"
-        # Extract busybox from the APK (it's a tar.gz with specific structure)
         cd "$BUILD_DIR"
-        tar -xzf busybox.apk bin/busybox.static 2>/dev/null || true
-        mv bin/busybox.static busybox 2>/dev/null || true
+        local alpine_url="https://dl-cdn.alpinelinux.org/alpine/v3.21/main/aarch64"
+        local apk_name
+        apk_name=$(curl -sL "$alpine_url/" | grep -o 'busybox-static-[^"]*\.apk' | head -1)
+        if [[ -z "$apk_name" ]]; then
+            log_error "Could not find busybox-static package in Alpine repository"
+            return 1
+        fi
+        log_info "Found $apk_name"
+        curl -fL -o busybox.apk "$alpine_url/$apk_name"
+        # Extract busybox from the APK (it's a tar.gz with specific structure)
+        tar -xzf busybox.apk bin/busybox.static
+        mv bin/busybox.static busybox
         rm -rf bin busybox.apk .PKGINFO .SIGN.* 2>/dev/null || true
         chmod +x busybox
     else
