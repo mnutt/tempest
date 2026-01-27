@@ -1,7 +1,7 @@
 # VM build targets for Tempest
 # Include this from the main Makefile with: include vm/vm.mk
 
-VM_RELEASE_VERSION := v0.0.2
+VM_RELEASE_VERSION := v0.0.3
 VM_RELEASE_BASE_URL := https://github.com/mnutt/tempest/releases/download
 VM_OUTPUT_DIR := $(BUILD_DIR)/vm/output
 
