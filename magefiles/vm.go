@@ -3,7 +3,11 @@
 package main
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,6 +15,11 @@ import (
 
 	"github.com/magefile/mage/mg"
 	"github.com/magefile/mage/sh"
+)
+
+const (
+	vmReleaseVersion = "v0.0.1"
+	vmReleaseBaseURL = "https://github.com/mnutt/tempest/releases/download"
 )
 
 // VM contains targets for building the Linux VM image
@@ -110,6 +119,86 @@ func (VM) Docker() error {
 	return sh.RunV("./vm/build.sh", "install")
 }
 
+// Download downloads pre-built VM images from GitHub releases
+// This is the fastest way to get started on macOS
+func (VM) Download() error {
+	arch := runtime.GOARCH
+	if arch == "amd64" {
+		arch = "x86_64"
+	}
+
+	url := fmt.Sprintf("%s/%s/tempest-vm-%s.tar.gz", vmReleaseBaseURL, vmReleaseVersion, arch)
+	outputDir := filepath.Join(buildDir, "vm", "output")
+
+	// Check if already downloaded
+	kernelPath := filepath.Join(outputDir, "kernel")
+	initrdPath := filepath.Join(outputDir, "initrd")
+	if _, err := os.Stat(kernelPath); err == nil {
+		if _, err := os.Stat(initrdPath); err == nil {
+			fmt.Println("VM images already downloaded. Run 'mage vm:install' to install.")
+			return nil
+		}
+	}
+
+	fmt.Printf("Downloading pre-built VM from %s...\n", url)
+
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return fmt.Errorf("failed to create output directory: %w", err)
+	}
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("failed to download VM: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to download VM: HTTP %d", resp.StatusCode)
+	}
+
+	gzr, err := gzip.NewReader(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to decompress: %w", err)
+	}
+	defer gzr.Close()
+
+	tr := tar.NewReader(gzr)
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("failed to read tar: %w", err)
+		}
+
+		// Only extract kernel and initrd
+		name := filepath.Base(header.Name)
+		if name != "kernel" && name != "initrd" {
+			continue
+		}
+
+		target := filepath.Join(outputDir, name)
+		f, err := os.Create(target)
+		if err != nil {
+			return fmt.Errorf("failed to create %s: %w", name, err)
+		}
+
+		if _, err := io.Copy(f, tr); err != nil {
+			f.Close()
+			return fmt.Errorf("failed to write %s: %w", name, err)
+		}
+		f.Close()
+		fmt.Printf("Extracted %s\n", name)
+	}
+
+	fmt.Println("")
+	fmt.Println("VM images downloaded successfully!")
+	fmt.Println("Run 'mage vm:install' to install to libexec directory.")
+
+	return nil
+}
+
 // QuickStart builds initramfs and installs (for development iteration)
 func (VM) QuickStart() error {
 	mg.Deps(Build)
@@ -119,10 +208,11 @@ func (VM) QuickStart() error {
 	kernelPath := filepath.Join(cfg.Libexecdir, "tempest", "vm", "kernel")
 
 	if _, err := os.Stat(kernelPath); os.IsNotExist(err) {
-		fmt.Println("Kernel not found. You need to build it first:")
+		fmt.Println("Kernel not found. You need to get it first:")
 		fmt.Println("")
-		fmt.Println("  Option 1 (Docker): mage vm:docker")
-		fmt.Println("  Option 2 (Linux):  ./vm/build.sh kernel && ./vm/build.sh install")
+		fmt.Println("  Option 1 (fastest): mage vm:download && mage vm:install")
+		fmt.Println("  Option 2 (Docker):  mage vm:docker")
+		fmt.Println("  Option 3 (Linux):   ./vm/build.sh kernel && ./vm/build.sh install")
 		fmt.Println("")
 		fmt.Println("For now, building initramfs only...")
 	}
