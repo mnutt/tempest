@@ -1,0 +1,245 @@
+#!/bin/sh
+# Tempest VM init script
+#
+# This runs as PID 1 inside the Linux VM and:
+# 1. Mounts essential filesystems
+# 2. Mounts virtio-fs shares for packages and grains
+# 3. Starts the tempest-vm-daemon
+
+set -e
+
+# Mount essential filesystems
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+mount -t tmpfs tmpfs /tmp
+mount -t tmpfs tmpfs /run
+
+# Create additional device nodes if needed
+mkdir -p /dev/pts
+mount -t devpts devpts /dev/pts
+
+# Set up console
+exec 0</dev/console
+exec 1>/dev/console
+exec 2>/dev/console
+
+echo "Tempest VM starting..."
+
+# Create a new root filesystem on tmpfs to escape the initramfs
+# This is required for pivot_root to work in containers/sandboxes
+echo "Setting up root filesystem..."
+mkdir -p /newroot
+mount -t tmpfs -o size=256m tmpfs /newroot
+
+# Copy essential files to new root
+mkdir -p /newroot/bin /newroot/sbin /newroot/etc /newroot/proc /newroot/sys
+mkdir -p /newroot/dev /newroot/tmp /newroot/run /newroot/sandstorm
+
+# Copy binaries
+cp /bin/busybox /newroot/bin/
+cp /bin/tempest-vm-daemon /newroot/bin/
+cp /bin/tempest-sandbox-launcher /newroot/bin/
+cp /bin/tempest-grain-agent /newroot/bin/ 2>/dev/null || true
+cp /bin/test-sandbox /newroot/bin/ 2>/dev/null || true
+cp /bin/test-mount /newroot/bin/ 2>/dev/null || true
+cp /bin/hello-x86_64 /newroot/bin/ 2>/dev/null || true
+cp /bin/strace /newroot/bin/ 2>/dev/null || true
+
+# Create busybox symlinks in new root
+cd /newroot/bin
+for cmd in sh ash cat cp dd df echo env false grep head kill ln ls mkdir \
+           mknod mount mv pivot_root ps pwd rm rmdir sed sleep stat sync \
+           tail tar touch true umount uname unshare; do
+    ln -sf busybox "$cmd"
+done
+cd /newroot/sbin
+ln -sf ../bin/busybox halt
+ln -sf ../bin/busybox init
+ln -sf ../bin/busybox poweroff
+ln -sf ../bin/busybox reboot
+cd /
+
+# Mount essential filesystems in new root
+mount -t proc proc /newroot/proc
+mount -t sysfs sysfs /newroot/sys
+mount -t devtmpfs devtmpfs /newroot/dev
+mount -t tmpfs tmpfs /newroot/tmp
+mount -t tmpfs tmpfs /newroot/run
+mkdir -p /newroot/dev/pts
+mount -t devpts devpts /newroot/dev/pts
+
+# Create sandstorm directories
+mkdir -p /newroot/sandstorm/apps /newroot/sandstorm/grains /newroot/sandstorm/mnt
+
+# Mount virtio-fs shares
+echo "Mounting virtio-fs shares..."
+if mount -t virtiofs packages /newroot/sandstorm/apps 2>/dev/null; then
+    echo "  Mounted /sandstorm/apps"
+    echo "  Apps contents:"
+    ls -la /newroot/sandstorm/apps/
+else
+    echo "  Warning: Failed to mount /sandstorm/apps (virtiofs 'packages' not available)"
+fi
+
+if mount -t virtiofs grains /newroot/sandstorm/grains 2>/dev/null; then
+    echo "  Mounted /sandstorm/grains"
+else
+    echo "  Warning: Failed to mount /sandstorm/grains (virtiofs 'grains' not available)"
+fi
+
+# Set up Rosetta for x86_64 binary translation (Apple Silicon only)
+# Mount at /tmp/lima-rosetta since /tmp is a tmpfs where we can create directories
+echo "Setting up Rosetta..."
+mkdir -p /newroot/tmp/lima-rosetta
+if mount -t virtiofs rosetta /newroot/tmp/lima-rosetta 2>/dev/null; then
+    echo "  Mounted Rosetta at /tmp/lima-rosetta"
+    echo "  Rosetta contents:"
+    ls -la /newroot/tmp/lima-rosetta/
+    ROSETTA_AVAILABLE=1
+else
+    echo "  Warning: Rosetta not available (virtiofs 'rosetta' not mounted)"
+    ROSETTA_AVAILABLE=0
+fi
+
+# Create startup script that runs after switch_root
+# This registers Rosetta with the F flag (which requires the interpreter to exist)
+# and then starts the daemon
+cat > /newroot/bin/start-daemon.sh << 'STARTUP_EOF'
+#!/bin/sh
+# Register Rosetta for x86_64 binary translation
+# Use /tmp/lima-rosetta path since /tmp is a tmpfs in sandboxes
+if [ -f /tmp/lima-rosetta/rosetta ]; then
+    # Mount binfmt_misc if not already mounted
+    if [ ! -d /proc/sys/fs/binfmt_misc ]; then
+        mkdir -p /proc/sys/fs/binfmt_misc
+    fi
+    if mount -t binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc 2>/dev/null; then
+        # Check if we should skip the F flag (for testing sandbox issues)
+        # Use "no-f-flag" in kernel cmdline to test without F flag
+        CMDLINE=$(cat /proc/cmdline)
+        case "$CMDLINE" in
+            *no-f-flag*)
+                # Register Rosetta WITHOUT F flag - interpreter is opened at exec time
+                # This may fix sandbox issues but requires rosetta path in each sandbox
+                echo ':rosetta:M::\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x3e\x00:\xff\xff\xff\xff\xff\xfe\xfe\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/tmp/lima-rosetta/rosetta:OC' > /proc/sys/fs/binfmt_misc/register 2>/dev/null && \
+                    echo "Registered Rosetta for x86_64 binaries (WITHOUT F flag)" || \
+                    echo "Warning: Failed to register Rosetta handler"
+                ;;
+            *)
+                # Register Rosetta WITH F flag - kernel opens interpreter at registration time
+                # and keeps the fd open. The path must still be accessible in sandboxes for
+                # Rosetta's /proc/self/exe verification.
+                echo ':rosetta:M::\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x3e\x00:\xff\xff\xff\xff\xff\xfe\xfe\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/tmp/lima-rosetta/rosetta:OCF' > /proc/sys/fs/binfmt_misc/register 2>/dev/null && \
+                    echo "Registered Rosetta for x86_64 binaries (with F flag)" || \
+                    echo "Warning: Failed to register Rosetta handler"
+                ;;
+        esac
+    fi
+fi
+# Quick Rosetta sanity check (always runs, outputs to console)
+echo "=== Quick Rosetta Check ==="
+if [ -f /tmp/lima-rosetta/rosetta ]; then
+    echo "Rosetta binary: OK"
+    # Try running rosetta directly (should show help or error)
+    /tmp/lima-rosetta/rosetta --version 2>&1 || /tmp/lima-rosetta/rosetta 2>&1 | head -3 || echo "(rosetta check done)"
+
+    # Run strace to capture ioctl calls if available
+    if [ -x /bin/strace ]; then
+        echo "=== strace ioctl trace ==="
+        /bin/strace -e ioctl /tmp/lima-rosetta/rosetta 2>&1 | head -20 || true
+        echo "==========================="
+    fi
+else
+    echo "Rosetta binary: NOT FOUND"
+fi
+echo "==========================="
+
+# Run full Rosetta test if requested (check for test-rosetta in kernel cmdline)
+if grep -q test-rosetta /proc/cmdline 2>/dev/null; then
+    echo "=== Running full Rosetta test (from kernel cmdline) ==="
+    /bin/test-rosetta.sh 2>&1 || true
+    echo "=== Rosetta test complete ==="
+fi
+
+# Run sandbox test if requested (check for test-sandbox in kernel cmdline)
+CMDLINE=$(cat /proc/cmdline)
+case "$CMDLINE" in
+    *test-sandbox*) RUN_SANDBOX_TEST=1 ;;
+    *) RUN_SANDBOX_TEST=0 ;;
+esac
+if [ "$RUN_SANDBOX_TEST" = "1" ]; then
+    echo "=== Running sandbox test (from kernel cmdline) ==="
+    /bin/test-sandbox 2>&1 || true
+    echo "=== Sandbox test complete ==="
+    echo "Halting VM..."
+    sleep 2
+    exec /sbin/poweroff -f
+fi
+
+# Run C mount test if requested (check for test-mount in kernel cmdline)
+case "$CMDLINE" in
+    *test-mount*) RUN_MOUNT_TEST=1 ;;
+    *) RUN_MOUNT_TEST=0 ;;
+esac
+if [ "$RUN_MOUNT_TEST" = "1" ]; then
+    echo "=== Running C mount test (from kernel cmdline) ==="
+    # Find first package and grain
+    PACKAGE_ID=""
+    for dir in /sandstorm/apps/*/; do
+        if [ -d "$dir" ]; then
+            PACKAGE_ID="${dir%/}"
+            PACKAGE_ID="${PACKAGE_ID##*/}"
+            break
+        fi
+    done
+    GRAIN_ID=""
+    for dir in /sandstorm/grains/*/; do
+        if [ -d "$dir" ]; then
+            GRAIN_ID="${dir%/}"
+            GRAIN_ID="${GRAIN_ID##*/}"
+            break
+        fi
+    done
+    if [ -n "$PACKAGE_ID" ]; then
+        echo "Using package: $PACKAGE_ID"
+        echo "Using grain: $GRAIN_ID"
+        /bin/test-mount "$PACKAGE_ID" "$GRAIN_ID" 2>&1 || true
+    else
+        echo "ERROR: No package found for test-mount"
+    fi
+    echo "=== C mount test complete ==="
+    echo "Halting VM..."
+    sleep 2
+    exec /sbin/poweroff -f
+fi
+
+# Start the daemon
+exec /bin/tempest-vm-daemon
+STARTUP_EOF
+chmod +x /newroot/bin/start-daemon.sh
+
+# Create symlinks for sandbox-launcher in expected location
+mkdir -p /newroot/bin/tempest
+ln -sf /bin/tempest-sandbox-launcher /newroot/bin/tempest/tempest-sandbox-launcher
+ln -sf /bin/tempest-grain-agent /newroot/bin/tempest/tempest-grain-agent
+
+# Copy test script if it exists
+if [ -f /bin/test-rosetta.sh ]; then
+    cp /bin/test-rosetta.sh /newroot/bin/test-rosetta.sh
+    chmod +x /newroot/bin/test-rosetta.sh
+fi
+
+# Pivot to new root using switch_root (designed for initramfs)
+echo "Switching to new root..."
+echo "Starting tempest-vm-daemon..."
+
+# Set up environment variables in the new shell
+export PATH="/bin:/sbin"
+export HOME="/root"
+export TEMPEST_LIBEXECDIR="/bin"
+export TEMPEST_LOCALSTATEDIR=""
+
+# Use switch_root to move to the new root and exec the startup script
+# The startup script registers Rosetta and then starts the daemon
+exec switch_root /newroot /bin/start-daemon.sh

@@ -1,10 +1,121 @@
 #include <sys/syscall.h>
 #include "constants.h"
 
+// ARM64 doesn't define many legacy syscalls. Define them as -1 so they
+// won't match any real syscall number (since we compare unsigned values,
+// -1 becomes a very large number that will never match).
+#ifndef SYS_access
+#define SYS_access 0xDEAD
+#endif
+#ifndef SYS_alarm
+#define SYS_alarm 0xDEAD
+#endif
+#ifndef SYS_chmod
+#define SYS_chmod 0xDEAD
+#endif
+#ifndef SYS_creat
+#define SYS_creat 0xDEAD
+#endif
+#ifndef SYS_dup2
+#define SYS_dup2 0xDEAD
+#endif
+#ifndef SYS_epoll_create
+#define SYS_epoll_create 0xDEAD
+#endif
+#ifndef SYS_epoll_wait
+#define SYS_epoll_wait 0xDEAD
+#endif
+#ifndef SYS_eventfd
+#define SYS_eventfd 0xDEAD
+#endif
+#ifndef SYS_fork
+#define SYS_fork 0xDEAD
+#endif
+#ifndef SYS_fstat
+#define SYS_fstat 0xDEAD
+#endif
+#ifndef SYS_getdents
+#define SYS_getdents 0xDEAD
+#endif
+#ifndef SYS_getpgrp
+#define SYS_getpgrp 0xDEAD
+#endif
+#ifndef SYS_getrlimit
+#define SYS_getrlimit 0xDEAD
+#endif
+#ifndef SYS_inotify_init
+#define SYS_inotify_init 0xDEAD
+#endif
+#ifndef SYS_link
+#define SYS_link 0xDEAD
+#endif
+#ifndef SYS_lstat
+#define SYS_lstat 0xDEAD
+#endif
+#ifndef SYS_mkdir
+#define SYS_mkdir 0xDEAD
+#endif
+#ifndef SYS_open
+#define SYS_open 0xDEAD
+#endif
+#ifndef SYS_pause
+#define SYS_pause 0xDEAD
+#endif
+#ifndef SYS_pipe
+#define SYS_pipe 0xDEAD
+#endif
+#ifndef SYS_poll
+#define SYS_poll 0xDEAD
+#endif
+#ifndef SYS_readlink
+#define SYS_readlink 0xDEAD
+#endif
+#ifndef SYS_rename
+#define SYS_rename 0xDEAD
+#endif
+#ifndef SYS_rmdir
+#define SYS_rmdir 0xDEAD
+#endif
+#ifndef SYS_select
+#define SYS_select 0xDEAD
+#endif
+#ifndef SYS_stat
+#define SYS_stat 0xDEAD
+#endif
+#ifndef SYS_symlink
+#define SYS_symlink 0xDEAD
+#endif
+#ifndef SYS_unlink
+#define SYS_unlink 0xDEAD
+#endif
+#ifndef SYS_utime
+#define SYS_utime 0xDEAD
+#endif
+#ifndef SYS_utimes
+#define SYS_utimes 0xDEAD
+#endif
+#ifndef SYS_vfork
+#define SYS_vfork 0xDEAD
+#endif
+#ifndef SYS_time
+#define SYS_time 0xDEAD
+#endif
+#ifndef SYS_signalfd
+#define SYS_signalfd 0xDEAD
+#endif
+#ifndef SYS_arch_prctl
+#define SYS_arch_prctl 0xDEAD
+#endif
+#ifndef SYS_chown
+#define SYS_chown 0xDEAD
+#endif
+#ifndef SYS_lchown
+#define SYS_lchown 0xDEAD
+#endif
+
 // Offsets to parts of `struct seccomp_data` (defined in
-// `linux/seccomp.h`). NOTE: this asumes a little-endian machine,
-// which is valid for x86_64 -- but we should sanity check this
-// if/when we port to other architectures.
+// `linux/seccomp.h`). NOTE: this assumes a little-endian machine,
+// which is valid for x86_64 and aarch64.
 //
 #define OFF_NR 0 // The syscall number.
 #define OFF_ARCH 4 // The architecture for the syscall.
@@ -20,10 +131,19 @@
 #define OFF_ARG_2_HI 36
 // Args can go up to 6, but we don't need more than this yet.
 
+// Select the correct architecture constant based on build target
+#if defined(__aarch64__)
+#define NATIVE_AUDIT_ARCH AUDIT_ARCH_AARCH64
+#elif defined(__x86_64__)
+#define NATIVE_AUDIT_ARCH AUDIT_ARCH_X86_64
+#else
+#error "Unsupported architecture"
+#endif
+
 start:
     // Deny non-native syscalls:
     ld [OFF_ARCH]
-    jne #AUDIT_ARCH_X86_64, enosys_near
+    jne #NATIVE_AUDIT_ARCH, enosys_near
 
     // Examine the syscall number.
     ld [OFF_NR]
@@ -252,6 +372,21 @@ sys_ioctl:
     jne #0, einval
 
     ld [OFF_ARG_1_LO]
+
+    // Rosetta x86_64 binary translation ioctls (Apple Virtualization.framework)
+    //
+    // These ioctls were identified via strace on actual x86_64 binary execution.
+    // All use type 0x61 ('a'), which is registered for ATM/QAT in Linux but
+    // neither exists in Apple VMs - these are Rosetta-specific ioctls.
+    //
+    // _IOC(_IOC_READ, 0x61, 0x22, 0x45) - verification ioctl
+    jeq #0x80456122, allow
+    // _IOC(_IOC_READ, 0x61, 0x23, 0x80) - runtime translation
+    jeq #0x80806123, allow
+    // _IOC(_IOC_NONE, 0x61, 0x24, 0) - runtime control
+    jeq #0x00006124, allow
+    // _IOC(_IOC_READ, 0x61, 0x25, 0x45) - runtime verification
+    jeq #0x80456125, allow
 
     // These can be used to toggle close-on-exec:
     jeq #FIOCLEX, allow
