@@ -177,6 +177,10 @@ func buildC() error {
 		log.Println("Skipping C build (sandbox launcher is Linux-only)")
 		return nil
 	}
+	if os.Getenv("SKIP_C_BUILD") != "" {
+		log.Println("Skipping C build (SKIP_C_BUILD is set)")
+		return nil
+	}
 	log.Println("Building C executable")
 	return runInDir("c", "make")
 }
