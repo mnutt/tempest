@@ -147,17 +147,15 @@ func (h *remoteGrainHandle) Conn() net.Conn {
 func (h *remoteGrainHandle) Kill() error {
 	ctx := context.Background()
 
-	// Ask the daemon to kill the grain
+	// Ask the daemon to kill the grain (ignore errors - daemon may be gone)
 	_, rel := h.backend.daemon.KillGrain(ctx, func(p vmdaemon.VmDaemon_killGrain_Params) error {
 		p.SetGrainId(h.grainID)
 		return nil
 	})
 	rel()
 
-	// Close the connection
-	if err := h.conn.Close(); err != nil {
-		return err
-	}
+	// Close the connection (ignore errors - may already be closed)
+	h.conn.Close()
 
 	// Remove from backend's grain map
 	h.backend.mu.Lock()

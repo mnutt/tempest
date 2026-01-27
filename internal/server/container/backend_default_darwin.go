@@ -58,10 +58,15 @@ func NewDefaultBackend(log *slog.Logger) (Backend, error) {
 
 	// Wait for the VM daemon to become ready with retries
 	log.Info("Waiting for VM daemon to become ready...")
+
+	// Give the kernel time to boot before attempting connections.
+	// The VM typically needs ~500ms to boot, so this avoids noisy retries.
+	time.Sleep(400 * time.Millisecond)
+
 	var backend *RemoteBackend
 	var err error
 	maxRetries := 30
-	retryDelay := 500 * time.Millisecond
+	retryDelay := 200 * time.Millisecond
 
 	for i := 0; i < maxRetries; i++ {
 		select {

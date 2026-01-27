@@ -12,7 +12,6 @@ import (
 	"sandstorm.org/go/tempest/capnp/grain"
 	"sandstorm.org/go/tempest/internal/common/types"
 	"sandstorm.org/go/tempest/internal/server/database"
-	"sandstorm.org/go/tempest/internal/server/logging"
 	"zenhack.net/go/util/exn"
 )
 
@@ -110,25 +109,25 @@ func (cmd pkgCommand) Start(ctx context.Context) (Container, error) {
 	exited := make(chan struct{})
 	go func() {
 		<-ctx.Done()
-		// Kill and wait for the grain to exit
+		// Kill and wait for the grain to exit.
+		// Ignore errors here - during shutdown the connection may already
+		// be closed (e.g., if the VM was stopped first), which is fine.
 		if err := handle.Kill(); err != nil {
-			logging.Panic(cmd.Log, "Failed to kill grain",
+			cmd.Log.Debug("Kill grain returned error (may be expected during shutdown)",
 				"error", err,
 				"grainID", cmd.GrainID,
 			)
+		} else {
+			cmd.Log.Debug("Killed grain",
+				"grainID", cmd.GrainID,
+			)
 		}
-		cmd.Log.Debug("Killed grain",
-			"grainID", cmd.GrainID,
-		)
 		if err := handle.Wait(); err != nil {
 			cmd.Log.Debug("Wait() on grain returned error",
 				"error", err,
 				"grainID", cmd.GrainID,
 			)
 		}
-		cmd.Log.Debug("Wait()ed for grain",
-			"grainID", cmd.GrainID,
-		)
 		<-conn.Done()
 		close(exited)
 	}()

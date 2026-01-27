@@ -8,7 +8,6 @@ import (
 	"net"
 	"os"
 	"sync"
-	"time"
 
 	"github.com/Code-Hex/vz/v3"
 	"golang.org/x/exp/slog"
@@ -265,7 +264,10 @@ func (m *DarwinManager) monitorVM(ctx context.Context) {
 	}
 }
 
-// Stop shuts down the VM gracefully.
+// Stop shuts down the VM.
+// We force stop immediately since the minimal VM init doesn't have ACPI
+// event handling for graceful shutdown, and all persistent data is on
+// virtiofs so there's no risk of data loss.
 func (m *DarwinManager) Stop(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -276,39 +278,9 @@ func (m *DarwinManager) Stop(ctx context.Context) error {
 
 	m.log.Info("Stopping Linux VM")
 
-	// Request stop (sends ACPI shutdown signal)
-	if m.vm.CanRequestStop() {
-		ok, err := m.vm.RequestStop()
-		if err != nil {
-			m.log.Warn("RequestStop failed, will force stop", "error", err)
-		} else if ok {
-			// Wait for graceful shutdown with timeout
-			stateCh := m.vm.StateChangedNotify()
-			timeout := time.After(10 * time.Second)
-		waitLoop:
-			for {
-				select {
-				case <-ctx.Done():
-					m.log.Warn("Context cancelled during VM shutdown")
-					break waitLoop
-				case <-timeout:
-					m.log.Warn("VM graceful shutdown timed out, forcing stop")
-					break waitLoop
-				case state := <-stateCh:
-					if state == vz.VirtualMachineStateStopped {
-						m.running = false
-						m.log.Info("Linux VM stopped gracefully")
-						return nil
-					}
-				}
-			}
-		}
-	}
-
-	// Force stop if graceful shutdown failed
 	if m.vm.CanStop() {
 		if err := m.vm.Stop(); err != nil {
-			m.log.Error("Force stop failed", "error", err)
+			m.log.Error("Stop failed", "error", err)
 			return fmt.Errorf("failed to stop VM: %w", err)
 		}
 	}
