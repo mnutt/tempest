@@ -133,7 +133,11 @@ func BootstrapBison(buildToolConfig *RuntimeConfigBuildTool) ([]string, error) {
 }
 
 func configureBison(bisonDir string) error {
-	cmd := exec.Command("./configure")
+	// gl_cv_func_getcwd_path_max=yes skips a gnulib test that creates deeply
+	// nested directories to check getcwd behavior. On VirtioFS/9p filesystems
+	// (used by Lima/Docker), path length limits aren't enforced, causing the
+	// test to loop indefinitely.
+	cmd := exec.Command("./configure", "gl_cv_func_getcwd_path_max=yes")
 	cmd.Dir = bisonDir
 	cmd.Env = append(cmd.Env, os.Environ()...)
 	cmd.Stdout = os.Stdout
