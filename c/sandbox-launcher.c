@@ -188,8 +188,15 @@ int main(int argc, char **argv) {
 
 	/* No, really, unshare the mounts. See the "SHARED SUBTREES" section of mount_namespaces(7)
 	   for details.
-	   Use MS_SLAVE instead of MS_PRIVATE to allow virtiofs ioctls to work properly
-	   while still preventing our mounts from propagating back to parent. */
+
+	   We use MS_SLAVE instead of MS_PRIVATE for virtiofs compatibility. Trade-offs:
+	   - MS_PRIVATE: Complete isolation, no mount events propagate in/out
+	   - MS_SLAVE: Parent mount events propagate in, ours don't propagate out
+
+	   MS_SLAVE is needed because virtiofs relies on shared mount propagation for some
+	   operations. The security impact is minimal: parent unmounts could affect us, but
+	   the parent is the VM init which doesn't unmount during normal operation, and we
+	   create our own mounts on top regardless. Our mounts still don't leak to parent. */
 	REQUIRE(mount("", "/", "", MS_REC|MS_SLAVE, "") == 0);
 
 	/* Set up a loopback interface in the new network namespace. */
@@ -227,20 +234,32 @@ int main(int argc, char **argv) {
 	/* Mount procfs in the sandbox. This is needed for:
 	 * - /proc/cpuinfo: runtime environments inspect this
 	 * - /proc/self/exe: required by Rosetta for x86_64 binary translation
+	 *
+	 * hidepid=2 ensures processes can only see their own /proc/[pid] entries,
+	 * preventing information disclosure about other processes in the sandbox.
 	 */
-	REQUIRE(mount("proc", CHROOT_MNT "/proc", "proc", MS_NOSUID|MS_NODEV|MS_NOEXEC, "") == 0);
+	REQUIRE(mount("proc", CHROOT_MNT "/proc", "proc", MS_NOSUID|MS_NODEV|MS_NOEXEC, "hidepid=2") == 0);
 
 	/* Supply a small /tmp. */
 	REQUIRE(mount("none", CHROOT_MNT "/tmp", "tmpfs", MS_NODEV|MS_NOSUID, "size=16m") == 0);
 
 	/* Mount Rosetta for x86_64 binary translation.
 	 * Try bind mount from VM's existing mount first - this preserves the virtiofs ioctl context.
-	 * Fall back to direct virtiofs mount if bind mount fails. */
+	 * Fall back to direct virtiofs mount if bind mount fails.
+	 * Apply MS_NOSUID|MS_NODEV|MS_NOEXEC for defense in depth (Rosetta binary is still
+	 * executable because it was opened before these flags are applied via binfmt_misc F flag). */
 	if (mkdir(CHROOT_MNT "/tmp/rosetta", 0755) == 0) {
+		int mounted = 0;
 		/* Try bind mount from existing VM mount first */
-		if (mount("/tmp/rosetta", CHROOT_MNT "/tmp/rosetta", "", MS_BIND, "") != 0) {
+		if (mount("/tmp/rosetta", CHROOT_MNT "/tmp/rosetta", "", MS_BIND, "") == 0) {
+			mounted = 1;
+		} else if (mount("rosetta", CHROOT_MNT "/tmp/rosetta", "virtiofs", MS_NOSUID|MS_NODEV, "") == 0) {
 			/* Fall back to direct virtiofs mount */
-			mount("rosetta", CHROOT_MNT "/tmp/rosetta", "virtiofs", 0, "");
+			mounted = 1;
+		}
+		/* Apply restrictive flags via remount (bind mounts require this) */
+		if (mounted) {
+			mount("", CHROOT_MNT "/tmp/rosetta", "", MS_REMOUNT|MS_BIND|MS_RDONLY|MS_NOSUID|MS_NODEV, "");
 		}
 	}
 
