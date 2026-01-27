@@ -95,7 +95,7 @@ macOS Host
 │       └── virtio-fs mounts
 │           ├── packages → /sandstorm/apps
 │           ├── grains → /sandstorm/grains
-│           └── rosetta → /tmp/lima-rosetta
+│           └── rosetta → /tmp/rosetta
 ```
 
 ## Rosetta Integration
@@ -103,13 +103,13 @@ macOS Host
 Rosetta enables running x86_64 Linux binaries on ARM64. The setup:
 
 1. **Host side**: Virtualization.framework shares Rosetta via virtio-fs
-2. **VM init**: Mounts Rosetta at `/tmp/lima-rosetta`, registers binfmt_misc with F flag
-3. **Sandbox**: Bind mounts Rosetta from VM's `/tmp/lima-rosetta` into the sandbox
+2. **VM init**: Mounts Rosetta at `/tmp/rosetta`, registers binfmt_misc with F flag
+3. **Sandbox**: Bind mounts Rosetta from VM's `/tmp/rosetta` into the sandbox
 
 ### binfmt_misc Registration
 
 ```bash
-echo ':rosetta:M::\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x3e\x00:\xff\xff\xff\xff\xff\xfe\xfe\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/tmp/lima-rosetta/rosetta:OCF' > /proc/sys/fs/binfmt_misc/register
+echo ':rosetta:M::\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x3e\x00:\xff\xff\xff\xff\xff\xfe\xfe\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/tmp/rosetta/rosetta:OCF' > /proc/sys/fs/binfmt_misc/register
 ```
 
 Flags:
@@ -119,7 +119,7 @@ Flags:
 
 ### Rosetta in Sandboxes
 
-The sandbox-launcher bind mounts `/tmp/lima-rosetta` from the VM's root namespace into each sandbox. This preserves the virtiofs ioctl context that Rosetta needs for verification.
+The sandbox-launcher bind mounts `/tmp/rosetta` from the VM's root namespace into each sandbox. This preserves the virtiofs ioctl context that Rosetta needs for verification.
 
 ## Seccomp Filter
 
@@ -146,7 +146,7 @@ rosetta error: Rosetta is only intended to run on Apple Silicon with a macOS hos
 
 This typically means:
 1. The Rosetta virtiofs share isn't mounted correctly
-2. The bind mount from `/tmp/lima-rosetta` failed
+2. The bind mount from `/tmp/rosetta` failed
 3. A required ioctl is being blocked by the seccomp filter
 
 Check the VM console log for mount errors:

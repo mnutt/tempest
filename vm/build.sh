@@ -227,17 +227,14 @@ build_initramfs() {
     cp "$busybox_src" "$initramfs_dir/bin/busybox"
     chmod +x "$initramfs_dir/bin/busybox"
 
-    # Create busybox symlinks
+    # Create minimal busybox symlinks for early init (before switch_root)
+    # The full set is created by the init script in /newroot
     cd "$initramfs_dir/bin"
-    for cmd in sh ash cat chmod cp dd df echo env false grep head kill ln ls mkdir \
-               mknod mount mv pivot_root ps pwd rm rmdir sed sh sleep stat sync \
-               tail tar touch true umount uname unshare vi; do
+    for cmd in sh cat cp echo ln ls mkdir mount chmod; do
         ln -sf busybox "$cmd"
     done
     cd "$initramfs_dir/sbin"
-    for cmd in halt init poweroff reboot switch_root; do
-        ln -sf ../bin/busybox "$cmd"
-    done
+    ln -sf ../bin/busybox switch_root
 
     # Copy tempest binaries (Linux builds use -linux suffix)
     log_info "Copying tempest binaries..."

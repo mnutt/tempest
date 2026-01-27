@@ -70,71 +70,34 @@ mount -t devpts devpts /newroot/dev/pts
 mkdir -p /newroot/sandstorm/apps /newroot/sandstorm/grains /newroot/sandstorm/mnt
 
 # Mount virtio-fs shares
-echo "Mounting virtio-fs shares..."
-if mount -t virtiofs packages /newroot/sandstorm/apps 2>/dev/null; then
-    echo "  Mounted /sandstorm/apps"
-    echo "  Apps contents:"
-    ls -la /newroot/sandstorm/apps/
-else
-    echo "  Warning: Failed to mount /sandstorm/apps (virtiofs 'packages' not available)"
-fi
-
-if mount -t virtiofs grains /newroot/sandstorm/grains 2>/dev/null; then
-    echo "  Mounted /sandstorm/grains"
-else
-    echo "  Warning: Failed to mount /sandstorm/grains (virtiofs 'grains' not available)"
-fi
+mount -t virtiofs packages /newroot/sandstorm/apps 2>/dev/null && \
+    echo "Mounted /sandstorm/apps" || echo "Warning: packages share not available"
+mount -t virtiofs grains /newroot/sandstorm/grains 2>/dev/null && \
+    echo "Mounted /sandstorm/grains" || echo "Warning: grains share not available"
 
 # Set up Rosetta for x86_64 binary translation (Apple Silicon only)
-# Mount at /tmp/lima-rosetta since /tmp is a tmpfs where we can create directories
-echo "Setting up Rosetta..."
-mkdir -p /newroot/tmp/lima-rosetta
-if mount -t virtiofs rosetta /newroot/tmp/lima-rosetta 2>/dev/null; then
-    echo "  Mounted Rosetta at /tmp/lima-rosetta"
-    echo "  Rosetta contents:"
-    ls -la /newroot/tmp/lima-rosetta/
-    ROSETTA_AVAILABLE=1
+mkdir -p /newroot/tmp/rosetta
+if mount -t virtiofs rosetta /newroot/tmp/rosetta 2>/dev/null; then
+    echo "Mounted Rosetta at /tmp/rosetta"
 else
-    echo "  Warning: Rosetta not available (virtiofs 'rosetta' not mounted)"
-    ROSETTA_AVAILABLE=0
+    echo "Warning: Rosetta not available"
 fi
 
 # Create startup script that runs after switch_root
-# This registers Rosetta with the F flag (which requires the interpreter to exist)
-# and then starts the daemon
+# This registers Rosetta with binfmt_misc and then starts the daemon
 cat > /newroot/bin/start-daemon.sh << 'STARTUP_EOF'
 #!/bin/sh
 # Register Rosetta for x86_64 binary translation
-# Use /tmp/lima-rosetta path since /tmp is a tmpfs in sandboxes
-if [ -f /tmp/lima-rosetta/rosetta ]; then
-    # Mount binfmt_misc if not already mounted
-    if [ ! -d /proc/sys/fs/binfmt_misc ]; then
-        mkdir -p /proc/sys/fs/binfmt_misc
-    fi
+if [ -f /tmp/rosetta/rosetta ]; then
     if mount -t binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc 2>/dev/null; then
-        # Check if we should skip the F flag (for testing sandbox issues)
-        # Use "no-f-flag" in kernel cmdline to test without F flag
-        CMDLINE=$(cat /proc/cmdline)
-        case "$CMDLINE" in
-            *no-f-flag*)
-                # Register Rosetta WITHOUT F flag - interpreter is opened at exec time
-                # This may fix sandbox issues but requires rosetta path in each sandbox
-                echo ':rosetta:M::\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x3e\x00:\xff\xff\xff\xff\xff\xfe\xfe\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/tmp/lima-rosetta/rosetta:OC' > /proc/sys/fs/binfmt_misc/register 2>/dev/null && \
-                    echo "Registered Rosetta for x86_64 binaries (WITHOUT F flag)" || \
-                    echo "Warning: Failed to register Rosetta handler"
-                ;;
-            *)
-                # Register Rosetta WITH F flag - kernel opens interpreter at registration time
-                # and keeps the fd open. The path must still be accessible in sandboxes for
-                # Rosetta's /proc/self/exe verification.
-                echo ':rosetta:M::\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x3e\x00:\xff\xff\xff\xff\xff\xfe\xfe\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/tmp/lima-rosetta/rosetta:OCF' > /proc/sys/fs/binfmt_misc/register 2>/dev/null && \
-                    echo "Registered Rosetta for x86_64 binaries (with F flag)" || \
-                    echo "Warning: Failed to register Rosetta handler"
-                ;;
-        esac
+        # Register with F flag - kernel keeps interpreter fd open
+        # O=open-binary, C=credentials, F=fix-binary (pre-open interpreter)
+        echo ':rosetta:M::\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x3e\x00:\xff\xff\xff\xff\xff\xfe\xfe\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/tmp/rosetta/rosetta:OCF' \
+            > /proc/sys/fs/binfmt_misc/register 2>/dev/null && \
+            echo "Registered Rosetta for x86_64 binaries" || \
+            echo "Warning: Failed to register Rosetta handler"
     fi
 fi
-# Start the daemon
 exec /bin/tempest-vm-daemon
 STARTUP_EOF
 chmod +x /newroot/bin/start-daemon.sh
