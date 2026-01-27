@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"sandstorm.org/go/tempest/internal/server/container"
 	"sandstorm.org/go/tempest/internal/server/database"
 	"sandstorm.org/go/tempest/internal/server/logging"
 	"sandstorm.org/go/tempest/internal/server/session"
@@ -23,7 +24,8 @@ func Main() {
 	httpsAddr := ":" + cfg.HTTP.TLSPort
 	db := util.Must(database.Open())
 	sessionStore := session.NewStore(util.Must(session.GetKeys()))
-	srv := newServer(cfg, lg, db, sessionStore)
+	backend := util.Must(container.NewDefaultBackend(lg))
+	srv := newServer(cfg, lg, db, sessionStore, backend)
 	defer srv.Release()
 
 	if cfg.HTTP.KeyFile != "" {

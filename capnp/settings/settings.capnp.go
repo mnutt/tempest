@@ -11,7 +11,7 @@ import (
 
 // Constants defined in settings.capnp.
 var (
-	AdminSettings = Setting_List(capnp.MustUnmarshalRoot(x_df25727aa20cb09f[0:1024]).List())
+	AdminSettings = Setting_List(capnp.MustUnmarshalRoot(x_df25727aa20cb09f[0:1520]).List())
 )
 
 type Setting capnp.Struct
@@ -150,41 +150,48 @@ func (p Setting_Future) Default() schema.Value_Future {
 	return schema.Value_Future{Future: p.Future.Field(2, nil)}
 }
 
-const schema_df25727aa20cb09f = "x\xdaL\x92=h\x14]\x14\x86\xcf{\xef\xee\x97f" +
-	">w\x87I\xa3\x08\x015(\x16\xf9\xc1 \x12\x90d" +
-	"\x92\x9d\x90\xd1\xdd\xcc\xdc{g\xd5\x04a\x1c\xb2\xab\x06" +
-	"\x92\xcd\xb2;\x82\xa6\x11,\x05\x1b\x11\x8b\x84(\x88\xad" +
-	"\xb8\xa5\x7f\x9d\x8d\x85\x88\xa4\x11D\x91@\x0a#\x84\xa8" +
-	"\x9d\xa0\x8c\xcc\x8fl\xba\xe7<\xef9s\x18\xce\x1dz" +
-	"\x8d\xf1\xdc\xf0\xff\xbb=\xc4\xc4\xc5\xfc\x7f\xd1\xcb\xa9#" +
-	"\xbfo\x9f\\\xbbOz!\x17=\xech\x8fVZ\xfd" +
-	"_\x88`|\xe6\xdf\x8cm\xdeC\xa4\xb68\x87\xcc1" +
-	"\x10E\xbb\xb5\x07\xab\xcf\xd6\x7f~$\xbd\x80nw>" +
-	"n3\xb6\xf3/\x8c\x1f\xf9\x98v\xf2O\xe9k\xd4\xae" +
-	"\x87\xe1B\xe3J\x9b\x0d\xcc\x07\xcdFs4\xa8--" +
-	"4T=\x0c\x0b\xb1u\x01\xec#\xb8\x1c(v?K" +
-	"\xb1\xa4a\x1c\x859\xc4\xf5;\xab\xe2\x1e\x07\x91\xbe~" +
-	"W<N\xe0\xc9\x9c\xe8$\xf0\xfc\x8cx\xc5!\xde0" +
-	"\xe8\x9bRlq\x88\xef\x0c\xfa\x9f9\x09\x0e\xa5\x81\xc1" +
-	"\xd8\x8f[\xea \xe2f\xa3\x1f+\xeaX\x8a\xc3\x90j" +
-	"$\xc5\xd3\x90j<E\x1b-UN\xb1\x8a\x96\xba\x90" +
-	"`dNV,\xbfdKX\x93\x9e#g\xfd*\x97" +
-	"eh\xc4\xb2`F\xc1w\xa5c\x9f+Y\x90]o" +
-	"UL\xe2v\xda8a*\xcb\xaf\xca2\x11\xc554" +
-	"\"\x1d\x1b\xd1\xd50l\x8e\x0e\x0e.\xb2\xe5\xf9`q" +
-	"\xa0\x1d4j\xedp\xb9\xb54\xb0\x80\xe5h\xda\xf3\\" +
-	"\xdfu$\xc1\xeb\x8e\x1c\xe0\xa7\x86\x92D\xf9\xaeC\\" +
-	"\xee\x89\x0e\xf5\x8c\x8c\x9c\xc8\xb2I\x0b\xd2\xf3\xa7\xec\xb2" +
-	"\x95\xac\xcb\xecY\x8b\xc6f\x13\x9bHU\xf1\\\x7f\xda" +
-	"Q\xd9\x82\xb4\xee.L\xeb\xaa\xb2\xa8O\xce\x98\x95=" +
-	"3\xae\xa9\xa8O\x9dwd)q\xff\xce\x8b\xec\xbcj" +
-	",\x15. 4\x9e#\xca\xc5w\xb2\x8e\x13\x89q\x0e" +
-	"Qf\xd0\x81^\xc4\xd2\x8ee\x89C\xb8\x0c:c\xbd" +
-	"`Dze\x82HLs\x08\x8f\xa1\xd0\x08\x96\xea\xd9" +
-	"?\xa2\x10\xdeh\xd6Q\x8c.\xbd\xfd\xb5\xb9s\xbd\xfd" +
-	">~$E\xc2\xcdZ\xfdrpm1D1Z\xd3" +
-	":\x1f6>\x1d~\x97%\x7f\x03\x00\x00\xff\xff\xe1\x87" +
-	"\xba\x1a"
+const schema_df25727aa20cb09f = "x\xdad\x93Kh;U\x18\xc5\xbfso\x9an\xa2" +
+	"\xc9\x98\xae\x04\xa9\xf8\xd8\x14\xe9\xcb*Z\x84v\x92\xdc" +
+	"\x92\xb1\x99\xcc\xcc\xbd\x93j\x8b0\x0eM\xd4B\xf3 " +
+	"\x99\x82-\x82P\x10\xc4\x9dE\\\xb4\xd4\x82+qc" +
+	"\x17.DW\xee\x14Dj7>P\xb4\xa0\xd0\x8aR" +
+	"\x10\x05\x05a\xfe\xdcLhR\xfe\xbbs~\xe7\xdc\xef" +
+	"\x9b\x19\xee\xcc\x82-\xa7\xe6\xee\xb9\x1e'\xe6\xbd0\x96" +
+	"\x8e?[y\xe4\xff\xb7\x9e<z\x97\x8cl*>9" +
+	"\xcd\xbc\xbf\xd7}\xf4g\"\xe4\x7f\xe2\xbf\xe7\xaf\xf88" +
+	"\x91\xfa\x95s\xc8\x14\x03Q|]\x7f\xef\xf0\x93\xe3\xbf" +
+	"~ #\x8ba{L\xd7\xf2\x17\xe9O\xf3Wi\xad" +
+	"~K\x7fD\x97q\xaf\x11E[\xad\x97{lz3" +
+	"\xec\xb4:\x8ba\xbd\xb9\xd5R\x8d(\xcaj\xea\x02\xb8" +
+	"\x97\xe0r 7\x1cK\x1a\xd2\x1cN`\x96\xb8\xf1\xe5" +
+	"\xa1w\xc6Ad|\x7f\xe0\xfd\xd2\x17W\x1b\xde\x1f}" +
+	"\xf1\xcf\xb3\xde\xbf\x1c*\x05\x86\xfc\x03\x90\xeaAp\xa8" +
+	"\xc7\xb4{\x1a\x1b\xea\x19\xed\xca\xda\xd5\xb0\xaf\x9e\x87>" +
+	"\x92\x0f\xb1\xa7\xea\x89lB\xaaN\"w!\xd5k\x89" +
+	"|\x03]\xf5f\"\xdfFW\xbd\x93\xc8c\x9c\xab\x0f" +
+	"\xf4\xbc\x8f\xf5\xbc\xcfq\xa0\xbeH\x82op\xa0\xbeK" +
+	"\xe4\x05>T\x97\xba\xf3\xb7\xee\x80\xed\xab\x14\xe3P9" +
+	"\xc6\x10\x9bE[\x04%KB\x14}G\xae\x075." +
+	"+\xc8\x10\x1b\x04U\x85\xc0\x95\x8e\xb5V\x12\x90C." +
+	"l\x93\xb8\x95\x14\x0b\xa6\x12AMV\x88H{d\x88" +
+	"\x0c\x9c\xc7\xafDQgqff\x9b\xb57\xc3\xed\xe9" +
+	"^\xd8\xaa\xf7\xa2v\xb79\xbd\x85v\\\xf6}7p" +
+	"\x1dI\xf0\x87G\xee\xe7O\xcd\xf6\x13\x15\xb8\x0eq9" +
+	"\x12=4\xbe\xb0\xf0\xf8 +\x0aH?X\xb1*\xa2" +
+	"\xbfn@W\x05-\xad\xf7i\x1f*\xdbw\x83\xb2\xa3" +
+	"\x06\x0b\x12?\\\x98\xf8\x9a\x124)\xab\xa6=r\xc6" +
+	"5\x15M\xaa\xe7\x1cY\xea3_\xd8\xaeP~\xc0\x8a" +
+	"N\xd57\xad\xaa\x90A\xc1,\xae\x8a*J\xc3\xa7\x9b" +
+	"\xca\x86;Q\xfb\xa6\x8b5;X\x15\xb2*P\xb95" +
+	"Cs\xabj\xf9\x12\xa5\xbb\xb8-lGf\xd7\x03\xbb" +
+	"0\xfa\xd2O\xcc\xcd\xdfj\x15\xdd\x9a\x1a\xf9\xc6\xf7a" +
+	"\xfe\xe6\x16cp\x8b\xd5R\x02\\\xc0\xcb\xf0\x14QJ" +
+	"_G1E\xe4-sx\x15\x06\x03\x98\x80\x86\x96\x86" +
+	"%\x0e\xcfe0\x18\x9b\x00#2\xec\x02\x91W\xe6\xf0" +
+	"|\x86l+l6\x06\xeb\x90\x8dv;\x0d\xe4\xe2\x17" +
+	"\xbf\xfa\xef\xe2\xcfW{g\xfa_\xc8\x11^\xaf7^" +
+	"\x0aw\xb6#\xe4\xe2\xa3\xcc\xe9\xb7\xe7?>\xfc\xf5 " +
+	"\xb9\x13\x00\x00\xff\xffO\xb3\xef."
 
 func RegisterSchema(reg *schemas.Registry) {
 	reg.Register(&schemas.Schema{
@@ -198,45 +205,60 @@ func RegisterSchema(reg *schemas.Registry) {
 }
 
 var x_df25727aa20cb09f = []byte{
-	0, 0, 0, 0, 127, 0, 0, 0,
-	1, 0, 0, 0, 39, 1, 0, 0,
-	48, 0, 0, 0, 0, 0, 3, 0,
-	141, 0, 0, 0, 154, 0, 0, 0,
-	148, 0, 0, 0, 3, 0, 1, 0,
+	0, 0, 0, 0, 189, 0, 0, 0,
+	1, 0, 0, 0, 159, 1, 0, 0,
+	68, 0, 0, 0, 0, 0, 3, 0,
+	201, 0, 0, 0, 154, 0, 0, 0,
+	208, 0, 0, 0, 3, 0, 1, 0,
 	0, 0, 0, 0, 0, 0, 0, 0,
-	157, 0, 0, 0, 146, 0, 0, 0,
-	164, 0, 0, 0, 3, 0, 1, 0,
+	217, 0, 0, 0, 146, 0, 0, 0,
+	224, 0, 0, 0, 3, 0, 1, 0,
 	0, 0, 0, 0, 0, 0, 0, 0,
-	173, 0, 0, 0, 90, 0, 0, 0,
-	176, 0, 0, 0, 3, 0, 1, 0,
+	233, 0, 0, 0, 90, 0, 0, 0,
+	236, 0, 0, 0, 3, 0, 1, 0,
 	0, 0, 0, 0, 0, 0, 0, 0,
-	185, 0, 0, 0, 74, 0, 0, 0,
-	188, 0, 0, 0, 3, 0, 1, 0,
-	200, 0, 0, 0, 2, 0, 1, 0,
-	225, 0, 0, 0, 82, 0, 0, 0,
-	228, 0, 0, 0, 3, 0, 1, 0,
-	240, 0, 0, 0, 2, 0, 1, 0,
-	253, 0, 0, 0, 90, 0, 0, 0,
-	0, 1, 0, 0, 3, 0, 1, 0,
-	12, 1, 0, 0, 2, 0, 1, 0,
-	25, 1, 0, 0, 130, 0, 0, 0,
-	28, 1, 0, 0, 3, 0, 1, 0,
-	0, 0, 0, 0, 0, 0, 0, 0,
-	37, 1, 0, 0, 122, 0, 0, 0,
-	40, 1, 0, 0, 3, 0, 1, 0,
-	0, 0, 0, 0, 0, 0, 0, 0,
-	49, 1, 0, 0, 82, 0, 0, 0,
-	52, 1, 0, 0, 3, 0, 1, 0,
-	0, 0, 0, 0, 0, 0, 0, 0,
-	61, 1, 0, 0, 82, 0, 0, 0,
-	64, 1, 0, 0, 3, 0, 1, 0,
-	0, 0, 0, 0, 0, 0, 0, 0,
-	73, 1, 0, 0, 114, 0, 0, 0,
-	76, 1, 0, 0, 3, 0, 1, 0,
-	0, 0, 0, 0, 0, 0, 0, 0,
-	85, 1, 0, 0, 114, 0, 0, 0,
+	245, 0, 0, 0, 74, 0, 0, 0,
+	248, 0, 0, 0, 3, 0, 1, 0,
+	4, 1, 0, 0, 2, 0, 1, 0,
+	29, 1, 0, 0, 82, 0, 0, 0,
+	32, 1, 0, 0, 3, 0, 1, 0,
+	44, 1, 0, 0, 2, 0, 1, 0,
+	57, 1, 0, 0, 90, 0, 0, 0,
+	60, 1, 0, 0, 3, 0, 1, 0,
+	72, 1, 0, 0, 2, 0, 1, 0,
+	85, 1, 0, 0, 130, 0, 0, 0,
 	88, 1, 0, 0, 3, 0, 1, 0,
 	0, 0, 0, 0, 0, 0, 0, 0,
+	97, 1, 0, 0, 122, 0, 0, 0,
+	100, 1, 0, 0, 3, 0, 1, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	109, 1, 0, 0, 82, 0, 0, 0,
+	112, 1, 0, 0, 3, 0, 1, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	121, 1, 0, 0, 82, 0, 0, 0,
+	124, 1, 0, 0, 3, 0, 1, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	133, 1, 0, 0, 114, 0, 0, 0,
+	136, 1, 0, 0, 3, 0, 1, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	145, 1, 0, 0, 114, 0, 0, 0,
+	148, 1, 0, 0, 3, 0, 1, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	157, 1, 0, 0, 210, 0, 0, 0,
+	168, 1, 0, 0, 3, 0, 1, 0,
+	180, 1, 0, 0, 2, 0, 1, 0,
+	193, 1, 0, 0, 146, 0, 0, 0,
+	200, 1, 0, 0, 3, 0, 1, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	209, 1, 0, 0, 146, 0, 0, 0,
+	216, 1, 0, 0, 3, 0, 1, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	225, 1, 0, 0, 170, 0, 0, 0,
+	232, 1, 0, 0, 3, 0, 1, 0,
+	244, 1, 0, 0, 2, 0, 1, 0,
+	1, 2, 0, 0, 130, 0, 0, 0,
+	4, 2, 0, 0, 3, 0, 1, 0,
+	16, 2, 0, 0, 2, 0, 1, 0,
 	65, 67, 77, 69, 95, 68, 73, 82,
 	69, 67, 84, 79, 82, 89, 95, 85,
 	82, 76, 0, 0, 0, 0, 0, 0,
@@ -326,4 +348,51 @@ var x_df25727aa20cb09f = []byte{
 	0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0,
+	84, 69, 77, 80, 69, 83, 84, 95,
+	67, 79, 78, 84, 65, 73, 78, 69,
+	82, 95, 66, 65, 67, 75, 69, 78,
+	68, 0, 0, 0, 0, 0, 0, 0,
+	12, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	12, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	1, 0, 0, 0, 42, 0, 0, 0,
+	97, 117, 116, 111, 0, 0, 0, 0,
+	84, 69, 77, 80, 69, 83, 84, 95,
+	86, 77, 95, 75, 69, 82, 78, 69,
+	76, 0, 0, 0, 0, 0, 0, 0,
+	12, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	84, 69, 77, 80, 69, 83, 84, 95,
+	86, 77, 95, 73, 78, 73, 84, 82,
+	68, 0, 0, 0, 0, 0, 0, 0,
+	12, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	84, 69, 77, 80, 69, 83, 84, 95,
+	86, 77, 95, 77, 69, 77, 79, 82,
+	89, 95, 77, 66, 0, 0, 0, 0,
+	12, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	12, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	1, 0, 0, 0, 34, 0, 0, 0,
+	53, 49, 50, 0, 0, 0, 0, 0,
+	84, 69, 77, 80, 69, 83, 84, 95,
+	86, 77, 95, 67, 80, 85, 83, 0,
+	12, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	12, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	1, 0, 0, 0, 18, 0, 0, 0,
+	50, 0, 0, 0, 0, 0, 0, 0,
 }

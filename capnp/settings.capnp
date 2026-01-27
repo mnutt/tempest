@@ -90,4 +90,31 @@ const adminSettings: List(Setting) = [
     name = "SMTP_PASSWORD",
     type = (text = void),
   ),
+
+  ( # Container backend type: "auto", "local", or "remote".
+    # "auto" selects the best backend for the platform.
+    # "local" uses direct process spawning (Linux only).
+    # "remote" uses a VM-based backend (macOS via Apple Virtualization Framework).
+    name = "TEMPEST_CONTAINER_BACKEND",
+    type = (text = void),
+    default = (text = "auto"),
+  ),
+  ( # Path to the Linux kernel for the VM (remote backend).
+    name = "TEMPEST_VM_KERNEL",
+    type = (text = void),
+  ),
+  ( # Path to the initrd for the VM (remote backend).
+    name = "TEMPEST_VM_INITRD",
+    type = (text = void),
+  ),
+  ( # Amount of memory to allocate to the VM in megabytes (remote backend).
+    name = "TEMPEST_VM_MEMORY_MB",
+    type = (text = void),
+    default = (text = "512"),
+  ),
+  ( # Number of CPUs to allocate to the VM (remote backend).
+    name = "TEMPEST_VM_CPUS",
+    type = (text = void),
+    default = (text = "2"),
+  ),
 ];

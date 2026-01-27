@@ -56,6 +56,7 @@ type server struct {
 	log          *slog.Logger
 	db           database.DB
 	sessionStore session.Store
+	backend      container.Backend
 	state        mutex.Mutex[serverState]
 }
 
@@ -66,14 +67,16 @@ type serverState struct {
 	containers    ContainerSet
 }
 
-func newServer(cfg Config, lg *slog.Logger, db database.DB, sessionStore session.Store) *server {
+func newServer(cfg Config, lg *slog.Logger, db database.DB, sessionStore session.Store, backend container.Backend) *server {
 	return &server{
 		cfg:          cfg,
 		log:          lg,
 		db:           db,
 		sessionStore: sessionStore,
+		backend:      backend,
 		state: mutex.New[serverState](serverState{
 			containers: ContainerSet{
+				Backend:             backend,
 				containersByGrainID: make(map[types.GrainID]container.Container),
 			},
 			grainSessions: make(map[grainSessionKey]grainSession),
@@ -414,6 +417,9 @@ func (s *server) getWebSession(ctx context.Context, wsp webSessionParams, sess s
 
 func (s *server) Release() {
 	s.db.Close()
+	if s.backend != nil {
+		s.backend.Close()
+	}
 	s.state.With(func(state *serverState) {
 		state.containers.Release()
 		for _, sess := range state.grainSessions {

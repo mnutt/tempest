@@ -85,11 +85,22 @@ const (
 	r.RecordFile(goConfigPath)
 
 	// Generate C config
+	// Use #ifndef guards so command-line -D flags can override these values
+	// (needed for VM builds where paths are different)
 	cConfig := fmt.Sprintf(`
 #pragma once
+
+#ifndef PREFIX
 #define PREFIX %q
+#endif
+
+#ifndef LIBEXECDIR
 #define LIBEXECDIR %q
+#endif
+
+#ifndef LOCALSTATEDIR
 #define LOCALSTATEDIR %q
+#endif
 `, cfg.Prefix, cfg.Libexecdir, cfg.Localstatedir)
 
 	cConfigPath := "./c/config.h"
@@ -127,12 +138,24 @@ func buildGo() error {
 		{"tempest-make-user", false},
 		{"tempest-grain-agent", true},
 		{"test-app", true},
+		{"test-vm-sandbox", false},
 	}
 
 	for _, exe := range exes {
 		if err := compileGoExe(exe.name, exe.static); err != nil {
 			return err
 		}
+	}
+
+	// Build Linux-only executables (for VM)
+	if err := compileLinuxExe("tempest-vm-daemon"); err != nil {
+		return err
+	}
+	if err := compileLinuxExe("tempest-grain-agent"); err != nil {
+		return err
+	}
+	if err := compileLinuxExe("test-sandbox"); err != nil {
+		return err
 	}
 
 	return nil
@@ -333,7 +356,46 @@ func compileGoExe(name string, static bool) error {
 		env["CGO_ENABLED"] = "1"
 	}
 
-	return sh.RunWith(env, goExe, "build", "-v", "-o", "_build/"+name, "./cmd/"+name)
+	if err := sh.RunWith(env, goExe, "build", "-v", "-o", "_build/"+name, "./cmd/"+name); err != nil {
+		return err
+	}
+
+	// On macOS, sign binaries that use Virtualization framework
+	if runtime.GOOS == "darwin" && (name == "tempest" || name == "test-vm-sandbox") {
+		entitlements := "./cmd/tempest/tempest.entitlements"
+		if _, err := os.Stat(entitlements); err == nil {
+			fmt.Printf("Signing %q with entitlements for Virtualization framework\n", name)
+			if err := sh.RunV("codesign", "--sign", "-", "--entitlements", entitlements, "--force", "_build/"+name); err != nil {
+				return fmt.Errorf("failed to sign %s: %w", name, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// compileLinuxExe compiles a Go executable for Linux (static, cross-compiled)
+// Uses the same architecture as the host for VM use cases
+// Output is saved with -linux suffix to avoid overwriting macOS binaries
+func compileLinuxExe(name string) error {
+	// Use arm64 on Apple Silicon, amd64 otherwise
+	goarch := "amd64"
+	if runtime.GOARCH == "arm64" {
+		goarch = "arm64"
+	}
+
+	fmt.Printf("Compiling Linux executable %q (arch=%s)\n", name, goarch)
+
+	goExe := getToolchainGo()
+	env := map[string]string{
+		"CGO_ENABLED": "0",
+		"GOOS":        "linux",
+		"GOARCH":      goarch,
+	}
+
+	// Use -linux suffix for Linux binaries to avoid overwriting macOS ones
+	outputName := "_build/" + name + "-linux"
+	return sh.RunWith(env, goExe, "build", "-v", "-o", outputName, "./cmd/"+name)
 }
 
 // maybeConfigure runs configure if config.json doesn't exist
