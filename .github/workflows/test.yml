@@ -1,0 +1,34 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Generate config
+        run: |
+          mkdir -p internal/config
+          cat > internal/config/config.go << 'EOF'
+          package config
+
+          const (
+            Prefix = "/tmp/tempest"
+            Libexecdir = "/tmp/tempest/libexec"
+            Localstatedir = "/tmp/tempest/var/lib"
+          )
+          EOF
+
+      - name: Run tests
+        run: |
+          go test ./internal/server/... ./internal/common/... ./pkg/...
