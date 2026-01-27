@@ -273,28 +273,7 @@ build_initramfs() {
         log_warn "tempest-grain-agent-linux not found"
     fi
 
-    # test-sandbox (debugging tool for sandbox/Rosetta issues)
-    if [[ -f "$PROJECT_ROOT/_build/test-sandbox-linux" ]]; then
-        cp "$PROJECT_ROOT/_build/test-sandbox-linux" "$initramfs_dir/bin/test-sandbox"
-        chmod +x "$initramfs_dir/bin/test-sandbox"
-    else
-        log_warn "test-sandbox-linux not found"
-    fi
-
-    # test-mount (C program for testing mount behavior)
-    if [[ -f "$PROJECT_ROOT/_build/test-mount" ]]; then
-        cp "$PROJECT_ROOT/_build/test-mount" "$initramfs_dir/bin/test-mount"
-        chmod +x "$initramfs_dir/bin/test-mount"
-    fi
-
-    # hello-x86_64 (x86_64 test binary for binfmt_misc/Rosetta testing)
-    if [[ -f "$PROJECT_ROOT/_build/hello-x86_64" ]]; then
-        cp "$PROJECT_ROOT/_build/hello-x86_64" "$initramfs_dir/bin/hello-x86_64"
-        chmod +x "$initramfs_dir/bin/hello-x86_64"
-        log_info "Included hello-x86_64 for binfmt_misc testing"
-    fi
-
-    # strace-static (for debugging syscalls)
+    # strace-static (for debugging syscalls - optional)
     if [[ -f "$PROJECT_ROOT/_build/strace-static" ]]; then
         cp "$PROJECT_ROOT/_build/strace-static" "$initramfs_dir/bin/strace"
         chmod +x "$initramfs_dir/bin/strace"
@@ -308,12 +287,6 @@ build_initramfs() {
     # Copy init script
     cp "$SCRIPT_DIR/initramfs/init" "$initramfs_dir/init"
     chmod +x "$initramfs_dir/init"
-
-    # Copy test script for debugging Rosetta
-    if [[ -f "$SCRIPT_DIR/initramfs/test-rosetta.sh" ]]; then
-        cp "$SCRIPT_DIR/initramfs/test-rosetta.sh" "$initramfs_dir/bin/test-rosetta.sh"
-        chmod +x "$initramfs_dir/bin/test-rosetta.sh"
-    fi
 
     # Create device nodes (only works on Linux as root, skip on macOS)
     # The VM uses devtmpfs which auto-populates /dev at boot

@@ -138,7 +138,6 @@ func buildGo() error {
 		{"tempest-make-user", false},
 		{"tempest-grain-agent", true},
 		{"test-app", true},
-		{"test-vm-sandbox", false},
 	}
 
 	for _, exe := range exes {
@@ -152,9 +151,6 @@ func buildGo() error {
 		return err
 	}
 	if err := compileLinuxExe("tempest-grain-agent"); err != nil {
-		return err
-	}
-	if err := compileLinuxExe("test-sandbox"); err != nil {
 		return err
 	}
 
@@ -361,7 +357,7 @@ func compileGoExe(name string, static bool) error {
 	}
 
 	// On macOS, sign binaries that use Virtualization framework
-	if runtime.GOOS == "darwin" && (name == "tempest" || name == "test-vm-sandbox") {
+	if runtime.GOOS == "darwin" && name == "tempest" {
 		entitlements := "./cmd/tempest/tempest.entitlements"
 		if _, err := os.Stat(entitlements); err == nil {
 			fmt.Printf("Signing %q with entitlements for Virtualization framework\n", name)

@@ -41,9 +41,6 @@ cp /bin/busybox /newroot/bin/
 cp /bin/tempest-vm-daemon /newroot/bin/
 cp /bin/tempest-sandbox-launcher /newroot/bin/
 cp /bin/tempest-grain-agent /newroot/bin/ 2>/dev/null || true
-cp /bin/test-sandbox /newroot/bin/ 2>/dev/null || true
-cp /bin/test-mount /newroot/bin/ 2>/dev/null || true
-cp /bin/hello-x86_64 /newroot/bin/ 2>/dev/null || true
 cp /bin/strace /newroot/bin/ 2>/dev/null || true
 
 # Create busybox symlinks in new root
@@ -137,83 +134,6 @@ if [ -f /tmp/lima-rosetta/rosetta ]; then
         esac
     fi
 fi
-# Quick Rosetta sanity check (always runs, outputs to console)
-echo "=== Quick Rosetta Check ==="
-if [ -f /tmp/lima-rosetta/rosetta ]; then
-    echo "Rosetta binary: OK"
-    # Try running rosetta directly (should show help or error)
-    /tmp/lima-rosetta/rosetta --version 2>&1 || /tmp/lima-rosetta/rosetta 2>&1 | head -3 || echo "(rosetta check done)"
-
-    # Run strace to capture ioctl calls if available
-    if [ -x /bin/strace ]; then
-        echo "=== strace ioctl trace ==="
-        /bin/strace -e ioctl /tmp/lima-rosetta/rosetta 2>&1 | head -20 || true
-        echo "==========================="
-    fi
-else
-    echo "Rosetta binary: NOT FOUND"
-fi
-echo "==========================="
-
-# Run full Rosetta test if requested (check for test-rosetta in kernel cmdline)
-if grep -q test-rosetta /proc/cmdline 2>/dev/null; then
-    echo "=== Running full Rosetta test (from kernel cmdline) ==="
-    /bin/test-rosetta.sh 2>&1 || true
-    echo "=== Rosetta test complete ==="
-fi
-
-# Run sandbox test if requested (check for test-sandbox in kernel cmdline)
-CMDLINE=$(cat /proc/cmdline)
-case "$CMDLINE" in
-    *test-sandbox*) RUN_SANDBOX_TEST=1 ;;
-    *) RUN_SANDBOX_TEST=0 ;;
-esac
-if [ "$RUN_SANDBOX_TEST" = "1" ]; then
-    echo "=== Running sandbox test (from kernel cmdline) ==="
-    /bin/test-sandbox 2>&1 || true
-    echo "=== Sandbox test complete ==="
-    echo "Halting VM..."
-    sleep 2
-    exec /sbin/poweroff -f
-fi
-
-# Run C mount test if requested (check for test-mount in kernel cmdline)
-case "$CMDLINE" in
-    *test-mount*) RUN_MOUNT_TEST=1 ;;
-    *) RUN_MOUNT_TEST=0 ;;
-esac
-if [ "$RUN_MOUNT_TEST" = "1" ]; then
-    echo "=== Running C mount test (from kernel cmdline) ==="
-    # Find first package and grain
-    PACKAGE_ID=""
-    for dir in /sandstorm/apps/*/; do
-        if [ -d "$dir" ]; then
-            PACKAGE_ID="${dir%/}"
-            PACKAGE_ID="${PACKAGE_ID##*/}"
-            break
-        fi
-    done
-    GRAIN_ID=""
-    for dir in /sandstorm/grains/*/; do
-        if [ -d "$dir" ]; then
-            GRAIN_ID="${dir%/}"
-            GRAIN_ID="${GRAIN_ID##*/}"
-            break
-        fi
-    done
-    if [ -n "$PACKAGE_ID" ]; then
-        echo "Using package: $PACKAGE_ID"
-        echo "Using grain: $GRAIN_ID"
-        /bin/test-mount "$PACKAGE_ID" "$GRAIN_ID" 2>&1 || true
-    else
-        echo "ERROR: No package found for test-mount"
-    fi
-    echo "=== C mount test complete ==="
-    echo "Halting VM..."
-    sleep 2
-    exec /sbin/poweroff -f
-fi
-
 # Start the daemon
 exec /bin/tempest-vm-daemon
 STARTUP_EOF
@@ -223,12 +143,6 @@ chmod +x /newroot/bin/start-daemon.sh
 mkdir -p /newroot/bin/tempest
 ln -sf /bin/tempest-sandbox-launcher /newroot/bin/tempest/tempest-sandbox-launcher
 ln -sf /bin/tempest-grain-agent /newroot/bin/tempest/tempest-grain-agent
-
-# Copy test script if it exists
-if [ -f /bin/test-rosetta.sh ]; then
-    cp /bin/test-rosetta.sh /newroot/bin/test-rosetta.sh
-    chmod +x /newroot/bin/test-rosetta.sh
-fi
 
 # Pivot to new root using switch_root (designed for initramfs)
 echo "Switching to new root..."

@@ -122,18 +122,6 @@ cc -static -o _build/tempest-sandbox-launcher c/sandbox-launcher.o
 
 echo "Built _build/tempest-sandbox-launcher"
 
-# Build test-mount if it exists
-if [ -f c/test-mount.c ]; then
-    cc -I _build -std=c11 -Wall -Wextra -static -DLIBEXECDIR='"/bin"' -DLOCALSTATEDIR='""' -o _build/test-mount c/test-mount.c
-    echo "Built _build/test-mount"
-fi
-
-# Build x86_64 test binary for binfmt_misc testing
-if [ -f c/hello-x86_64.c ]; then
-    x86_64-linux-gnu-gcc -static -o _build/hello-x86_64 c/hello-x86_64.c
-    echo "Built _build/hello-x86_64 (x86_64 static binary for binfmt_misc test)"
-fi
-
 # Build initramfs
 ./vm/build.sh initramfs
 `

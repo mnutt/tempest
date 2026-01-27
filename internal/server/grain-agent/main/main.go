@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
 
 	"capnproto.org/go/capnp/v3"
 	"golang.org/x/exp/slog"
@@ -123,84 +122,11 @@ func spawnSpkCmd(lg *slog.Logger, appTitle string, spkCmd spk.Manifest_Command) 
 	cmd, err := parseCmd(spkCmd)
 	util.Chkfatal(err)
 
-	lg.Info("Starting up app",
+	lg.Info("Starting app",
 		"appTitle", appTitle,
 		"command", cmd.Args,
 	)
 
-	// Debug: check if command exists and Rosetta is available
-	if _, err := os.Stat(cmd.Args[0]); err != nil {
-		lg.Error("Command binary not found", "path", cmd.Args[0], "error", err)
-	} else {
-		lg.Info("Command binary exists", "path", cmd.Args[0])
-	}
-	if _, err := os.Stat("/tmp/lima-rosetta/rosetta"); err != nil {
-		lg.Error("Rosetta not available in sandbox", "error", err)
-	} else {
-		lg.Info("Rosetta available at /tmp/lima-rosetta/rosetta")
-	}
-	// Debug: list /run directory and check mount info
-	if entries, err := os.ReadDir("/run"); err == nil {
-		var names []string
-		for _, e := range entries {
-			names = append(names, e.Name())
-		}
-		lg.Info("Contents of /run", "entries", names)
-	}
-	// Check /proc/self/exe symlink
-	if link, err := os.Readlink("/proc/self/exe"); err == nil {
-		lg.Info("Current /proc/self/exe", "target", link)
-	}
-	// Check mount info for /mnt/lima-rosetta
-	if data, err := os.ReadFile("/proc/self/mountinfo"); err == nil {
-		lines := string(data)
-		for _, line := range strings.Split(lines, "\n") {
-			if strings.Contains(line, "lima-rosetta") {
-				lg.Info("Rosetta mount info", "line", line)
-			}
-		}
-	}
-
-	// Test: Try running Rosetta directly to verify it works in the sandbox
-	lg.Info("Testing Rosetta directly...")
-	testRosetta := exec.Command("/tmp/lima-rosetta/rosetta")
-	testOutput, testErr := testRosetta.CombinedOutput()
-	if testErr != nil {
-		lg.Info("Rosetta direct test result", "output", string(testOutput), "error", testErr)
-	} else {
-		lg.Info("Rosetta direct test succeeded", "output", string(testOutput))
-	}
-
-	// Test: Try running hello-x86_64 if it exists (tests binfmt_misc path)
-	if _, err := os.Stat("/tmp/hello-x86_64"); err == nil {
-		lg.Info("Testing hello-x86_64 via binfmt_misc...")
-		testHello := exec.Command("/tmp/hello-x86_64")
-		helloOutput, helloErr := testHello.CombinedOutput()
-		if helloErr != nil {
-			lg.Error("hello-x86_64 test FAILED", "output", string(helloOutput), "error", helloErr)
-		} else {
-			lg.Info("hello-x86_64 test SUCCEEDED", "output", string(helloOutput))
-		}
-	} else {
-		lg.Info("hello-x86_64 not found in sandbox, skipping binfmt_misc test")
-	}
-
-	// Check if the app binary is x86_64 (ELF magic + machine type)
-	if appData, err := os.ReadFile(cmd.Args[0]); err == nil && len(appData) >= 20 {
-		if appData[0] == 0x7f && appData[1] == 'E' && appData[2] == 'L' && appData[3] == 'F' {
-			// ELF file - check machine type at offset 18 (little-endian 16-bit)
-			machine := uint16(appData[18]) | uint16(appData[19])<<8
-			if machine == 0x3e { // EM_X86_64
-				lg.Info("App binary is x86_64, will use Rosetta via binfmt_misc")
-			} else if machine == 0xb7 { // EM_AARCH64
-				lg.Info("App binary is ARM64, native execution")
-			} else {
-				lg.Info("App binary ELF machine type", "machine", fmt.Sprintf("0x%x", machine))
-			}
-		}
-	}
-
-	lg.Info("Starting actual app command...")
 	osCmd := cmd.ToOsCmd()
 
 	// TODO: make direct these in a more structured way?
