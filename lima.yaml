@@ -1,0 +1,119 @@
+# Lima configuration for Tempest development
+
+# Extend startup timeout for provisioning (default is 600s)
+timeout: 1800
+
+# Sandstorm requires x86_64 architecture
+arch: x86_64
+vmType: qemu
+
+# Use Fedora 43
+images:
+  - location: "https://download.fedoraproject.org/pub/fedora/linux/releases/43/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-43-1.6.x86_64.qcow2"
+    arch: x86_64
+    digest: "sha256:846574c8a97cd2d8dc1f231062d73107cc85cbbbda56335e264a46e3a6c8ab2f"
+
+# Resource allocation
+cpus: null  # Use default (matches host)
+memory: "2GiB"
+disk: "20GiB"
+
+# Disable containerd/nerdctl (not needed)
+containerd:
+  system: false
+  user: false
+
+# Mount the project directory
+mounts:
+  - location: "~/.sandstorm"
+    mountPoint: "/host-dot-sandstorm"
+    writable: true
+  - location: "~/p/src/tempest"
+    mountPoint: "/opt/tempest"
+    writable: true
+
+# Forward ports for tempest and sandstorm
+portForwards:
+  - guestPort: 8000
+    hostIP: "127.0.0.1"
+    hostPort: 8000
+  - guestPort: 6090
+    hostIP: "127.0.0.1"
+    hostPort: 6090
+
+# Provision the VM
+provision:
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -exuo pipefail
+
+      dnf install -y \
+        go \
+        tinygo \
+        binaryen \
+        capnproto \
+        flex \
+        bison
+
+      export HOME=/root
+      export GOPATH=/root/go
+      export GOCACHE=/root/.cache/go-build
+      export GOBIN=/usr/local/bin
+      go install capnproto.org/go/capnp/v3/capnpc-go@latest
+
+      # Install the BPF assembler (extract only needed files):
+      mkdir -p /var/tmp
+      curl https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.3.1.tar.xz > /var/tmp/linux.tar.xz
+      cd /var/tmp
+      tar -xf linux.tar.xz --no-same-owner \
+        'linux-*/tools/bpf' \
+        'linux-*/tools/include' \
+        'linux-*/tools/scripts' \
+        'linux-*/tools/build' \
+        'linux-*/arch/x86/include'
+      cd linux-*/tools/bpf
+      make bpf_asm
+      install -Dm755 -t /usr/local/bin/ bpf_asm
+      cd /
+      rm -rf /var/tmp/linux*
+
+      # Install sandstorm:
+      curl https://install.sandstorm.io/ > /tmp/install-sandstorm.sh
+      bash /tmp/install-sandstorm.sh -d -e -p 6090
+      # Make the lima user part of the sandstorm group
+      usermod -a -G 'sandstorm' '{{.User}}'
+      # Bind to all addresses so port-forward works
+      sed --in-place='' \
+          --expression='s/^BIND_IP=.*/BIND_IP=0.0.0.0/' \
+          /opt/sandstorm/sandstorm.conf
+      systemctl restart sandstorm
+
+      # Disable git fsmonitor to avoid infinite loops on mounted filesystems
+      git config --system core.fsmonitor false
+      git config --system core.untrackedCache false
+
+      # Disable VCS stamping in Go builds to avoid git loops on mounted filesystems
+      echo 'export GOFLAGS="-buildvcs=false"' >> /etc/profile.d/go-buildvcs.sh
+
+      # Create toolchain directory on local (case-sensitive) filesystem
+      mkdir -p /opt/go-toolchains
+      chown '{{.User}}:{{.User}}' /opt/go-toolchains
+
+# SSH configuration
+ssh:
+  localPort: 0
+  forwardAgent: false
+  # ssh.overVsock does not work with Fedora 43 due to a SELinux policy issue
+  # https://github.com/lima-vm/lima/issues/4334#issuecomment-3561294333
+  overVsock: false
+
+# Message shown after VM starts
+message: |
+  Your Tempest dev environment is running.
+  Access Sandstorm at http://local.sandstorm.io:6090
+  Access Tempest at http://localhost:8000
+
+  To SSH: limactl shell tempest
+  To stop: limactl stop tempest
+  To delete: limactl delete tempest

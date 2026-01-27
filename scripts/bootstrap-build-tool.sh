@@ -41,7 +41,8 @@
 [ -z "${DOWNLOAD_USER_AGENT}" ] && DOWNLOAD_USER_AGENT="tempest-bootstrap-build-tool"
 
 script_dir="$(cd "$(dirname "$0")" && pwd)"
-toolchain_dir="$(cd "${script_dir}"/.. && pwd)/toolchain"
+[ -z "${TOOLCHAIN_DIR}" ] && TOOLCHAIN_DIR="$(cd "${script_dir}"/.. && pwd)/toolchain"
+toolchain_dir="${TOOLCHAIN_DIR}"
 
 go_version="1.25.3"
 go_destination_file="go${go_version}.linux-amd64.tar.gz"
