@@ -234,14 +234,13 @@ int main(int argc, char **argv) {
 	REQUIRE(mount("none", CHROOT_MNT "/tmp", "tmpfs", MS_NODEV|MS_NOSUID, "size=16m") == 0);
 
 	/* Mount Rosetta for x86_64 binary translation.
-	 * We use /tmp/lima-rosetta since /tmp is guaranteed to exist (it's a tmpfs we just mounted).
 	 * Try bind mount from VM's existing mount first - this preserves the virtiofs ioctl context.
 	 * Fall back to direct virtiofs mount if bind mount fails. */
-	if (mkdir(CHROOT_MNT "/tmp/lima-rosetta", 0755) == 0) {
+	if (mkdir(CHROOT_MNT "/tmp/rosetta", 0755) == 0) {
 		/* Try bind mount from existing VM mount first */
-		if (mount("/tmp/lima-rosetta", CHROOT_MNT "/tmp/lima-rosetta", "", MS_BIND, "") != 0) {
+		if (mount("/tmp/rosetta", CHROOT_MNT "/tmp/rosetta", "", MS_BIND, "") != 0) {
 			/* Fall back to direct virtiofs mount */
-			mount("rosetta", CHROOT_MNT "/tmp/lima-rosetta", "virtiofs", 0, "");
+			mount("rosetta", CHROOT_MNT "/tmp/rosetta", "virtiofs", 0, "");
 		}
 	}
 

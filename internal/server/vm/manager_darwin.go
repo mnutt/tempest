@@ -171,45 +171,38 @@ func (m *DarwinManager) Start(ctx context.Context) error {
 	return nil
 }
 
+// addDirectoryShare creates a virtio-fs share for a host directory.
+func addDirectoryShare(shares *[]vz.DirectorySharingDeviceConfiguration, tag, path string, readOnly bool) error {
+	dir, err := vz.NewSharedDirectory(path, readOnly)
+	if err != nil {
+		return fmt.Errorf("failed to create %s share: %w", tag, err)
+	}
+	mount, err := vz.NewVirtioFileSystemDeviceConfiguration(tag)
+	if err != nil {
+		return fmt.Errorf("failed to create %s mount config: %w", tag, err)
+	}
+	share, err := vz.NewSingleDirectoryShare(dir)
+	if err != nil {
+		return fmt.Errorf("failed to create %s single share: %w", tag, err)
+	}
+	mount.SetDirectoryShare(share)
+	*shares = append(*shares, mount)
+	return nil
+}
+
 // configureFilesystemShares sets up virtio-fs shares for packages and grains.
 func (m *DarwinManager) configureFilesystemShares(vmConfig *vz.VirtualMachineConfiguration) error {
 	var shares []vz.DirectorySharingDeviceConfiguration
 
-	// Packages directory (read-only)
-	packagesShare, err := vz.NewSharedDirectory(m.config.PackagesDir, true)
-	if err != nil {
-		return fmt.Errorf("failed to create packages share: %w", err)
+	if err := addDirectoryShare(&shares, "packages", m.config.PackagesDir, true); err != nil {
+		return err
 	}
-	packagesMount, err := vz.NewVirtioFileSystemDeviceConfiguration("packages")
-	if err != nil {
-		return fmt.Errorf("failed to create packages mount config: %w", err)
+	if err := addDirectoryShare(&shares, "grains", m.config.GrainsDir, false); err != nil {
+		return err
 	}
-	packagesSingleShare, err := vz.NewSingleDirectoryShare(packagesShare)
-	if err != nil {
-		return fmt.Errorf("failed to create packages single share: %w", err)
-	}
-	packagesMount.SetDirectoryShare(packagesSingleShare)
-	shares = append(shares, packagesMount)
-
-	// Grains directory (read-write)
-	grainsShare, err := vz.NewSharedDirectory(m.config.GrainsDir, false)
-	if err != nil {
-		return fmt.Errorf("failed to create grains share: %w", err)
-	}
-	grainsMount, err := vz.NewVirtioFileSystemDeviceConfiguration("grains")
-	if err != nil {
-		return fmt.Errorf("failed to create grains mount config: %w", err)
-	}
-	grainsSingleShare, err := vz.NewSingleDirectoryShare(grainsShare)
-	if err != nil {
-		return fmt.Errorf("failed to create grains single share: %w", err)
-	}
-	grainsMount.SetDirectoryShare(grainsSingleShare)
-	shares = append(shares, grainsMount)
 
 	// Rosetta share for x86_64 binary translation (ARM64 only)
 	if err := m.configureRosetta(&shares); err != nil {
-		// Log warning but don't fail - Rosetta is optional
 		m.log.Warn("Rosetta not available, x86_64 binaries will not work", "error", err)
 	}
 
