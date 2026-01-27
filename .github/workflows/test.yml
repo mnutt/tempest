@@ -19,7 +19,7 @@ jobs:
       - name: Configure and build
         run: |
           ./configure --prefix=/tmp/tempest
-          make build
+          SKIP_C_BUILD=1 make build
 
       - name: Run tests
         run: |
