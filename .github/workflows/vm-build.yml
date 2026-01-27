@@ -70,9 +70,9 @@ jobs:
           cpp -I _build -DTEMPEST_ROSETTA_COMPAT c/filter.s -o _build/filter_preproc.s
           bpf_asm -c < _build/filter_preproc.s > _build/bpf_filter.h
 
-          # Compile sandbox-launcher
+          # Compile sandbox-launcher with TEMPEST_ROSETTA_COMPAT for Rosetta support
           cc -I _build -std=c11 -Wall -Wextra -static \
-              -DLIBEXECDIR='"/bin"' -DLOCALSTATEDIR='""' \
+              -DLIBEXECDIR='"/bin"' -DLOCALSTATEDIR='""' -DTEMPEST_ROSETTA_COMPAT \
               -c -o c/sandbox-launcher.o c/sandbox-launcher.c
           cc -static -o _build/tempest-sandbox-launcher c/sandbox-launcher.o
 

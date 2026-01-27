@@ -25,8 +25,9 @@ cpp -I _build -DTEMPEST_ROSETTA_COMPAT c/filter.s -o _build/filter_preproc.s
 # Inside the VM:
 #   - binaries are in /bin (LIBEXECDIR)
 #   - apps/grains are in /sandstorm (LOCALSTATEDIR="")
+# TEMPEST_ROSETTA_COMPAT enables Rosetta support (MS_SLAVE mounts, full procfs, etc.)
 cc -I _build -std=c11 -Wall -Wextra -static -DLIBEXECDIR='"/bin"' -DLOCALSTATEDIR='""' \
-    -c -o c/sandbox-launcher.o c/sandbox-launcher.c
+    -DTEMPEST_ROSETTA_COMPAT -c -o c/sandbox-launcher.o c/sandbox-launcher.c
 cc -static -o _build/tempest-sandbox-launcher c/sandbox-launcher.o
 
 echo "Built _build/tempest-sandbox-launcher"

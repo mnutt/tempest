@@ -187,17 +187,22 @@ int main(int argc, char **argv) {
 		CLONE_SYSVSEM) == 0);
 
 	/* No, really, unshare the mounts. See the "SHARED SUBTREES" section of mount_namespaces(7)
-	   for details.
-
-	   We use MS_SLAVE instead of MS_PRIVATE for virtiofs compatibility. Trade-offs:
+	   for details. */
+#ifdef TEMPEST_ROSETTA_COMPAT
+	/* We use MS_SLAVE instead of MS_PRIVATE for virtiofs/Rosetta compatibility.
+	   Trade-offs:
 	   - MS_PRIVATE: Complete isolation, no mount events propagate in/out
 	   - MS_SLAVE: Parent mount events propagate in, ours don't propagate out
 
-	   MS_SLAVE is needed because virtiofs relies on shared mount propagation for some
-	   operations. The security impact is minimal: parent unmounts could affect us, but
-	   the parent is the VM init which doesn't unmount during normal operation, and we
-	   create our own mounts on top regardless. Our mounts still don't leak to parent. */
+	   MS_SLAVE is required because Rosetta needs /proc/self/exe to be accessible,
+	   and this fails with MS_PRIVATE (tested: "rosetta error: Unable to open
+	   /proc/self/exe: 2"). The security impact is minimal: parent unmounts could
+	   affect us, but the parent is the VM init which doesn't unmount during normal
+	   operation. Our mounts still don't leak to parent. */
 	REQUIRE(mount("", "/", "", MS_REC|MS_SLAVE, "") == 0);
+#else
+	REQUIRE(mount("", "/", "", MS_REC|MS_PRIVATE, "") == 0);
+#endif
 
 	/* Set up a loopback interface in the new network namespace. */
 	{
@@ -231,6 +236,7 @@ int main(int argc, char **argv) {
 	REQUIRE(chdir(sandbox_id) == 0);
 	REQUIRE(mount("sandbox", CHROOT_MNT "/var", "", MS_BIND, "") == 0);
 
+#ifdef TEMPEST_ROSETTA_COMPAT
 	/* Mount procfs in the sandbox. This is needed for:
 	 * - /proc/cpuinfo: runtime environments inspect this
 	 * - /proc/self/exe: required by Rosetta for x86_64 binary translation
@@ -239,10 +245,15 @@ int main(int argc, char **argv) {
 	 * preventing information disclosure about other processes in the sandbox.
 	 */
 	REQUIRE(mount("proc", CHROOT_MNT "/proc", "proc", MS_NOSUID|MS_NODEV|MS_NOEXEC, "hidepid=2") == 0);
+#else
+	/* Bind-mount only cpuinfo. Runtime environments typically inspect this. */
+	REQUIRE(mount("/proc/cpuinfo", CHROOT_MNT "/proc/cpuinfo", "", MS_BIND, "") == 0);
+#endif
 
 	/* Supply a small /tmp. */
 	REQUIRE(mount("none", CHROOT_MNT "/tmp", "tmpfs", MS_NODEV|MS_NOSUID, "size=16m") == 0);
 
+#ifdef TEMPEST_ROSETTA_COMPAT
 	/* Mount Rosetta for x86_64 binary translation.
 	 * Try bind mount from VM's existing mount first - this preserves the virtiofs ioctl context.
 	 * Fall back to direct virtiofs mount if bind mount fails.
@@ -262,6 +273,7 @@ int main(int argc, char **argv) {
 			mount("", CHROOT_MNT "/tmp/rosetta", "", MS_REMOUNT|MS_BIND|MS_RDONLY|MS_NOSUID|MS_NODEV, "");
 		}
 	}
+#endif
 
 	/* Set up /dev; a read-only tmpfs with a minimal set of devices. */
 	REQUIRE(mount("none", CHROOT_MNT "/dev", "tmpfs", MS_NOSUID, "") == 0);
