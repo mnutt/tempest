@@ -121,6 +121,28 @@ Flags:
 
 The sandbox-launcher bind mounts `/tmp/rosetta` from the VM's root namespace into each sandbox. This preserves the virtiofs ioctl context that Rosetta needs for verification.
 
+## Procfs Restrictions
+
+The sandbox uses a restricted `/proc` mount to minimize information disclosure while maintaining Rosetta compatibility:
+
+```c
+mount("proc", "/proc", "proc", MS_NOSUID|MS_NODEV|MS_NOEXEC, "subset=pid,hidepid=2");
+```
+
+- **`subset=pid`**: Hides all top-level files (`/proc/meminfo`, `/proc/sys/*`, `/proc/kallsyms`, etc.), showing only PID-related entries
+- **`hidepid=2`**: Processes can only see their own `/proc/[pid]` entries
+
+This normalizes the environment closer to native Linux sandbox behavior:
+
+| Entry | Available |
+|-------|-----------|
+| `/proc/cpuinfo` | ✓ (explicitly bind-mounted) |
+| `/proc/self/exe` | ✓ (required by Rosetta) |
+| `/proc/self/maps` | ✓ (PID-related) |
+| `/proc/meminfo` | ✗ (hidden by subset=pid) |
+| `/proc/sys/*` | ✗ (hidden by subset=pid) |
+| `/proc/kallsyms` | ✗ (hidden by subset=pid) |
+
 ## Seccomp Filter
 
 The sandbox uses seccomp-bpf to restrict syscalls. Rosetta requires 4 specific ioctls for x86_64 binary translation:

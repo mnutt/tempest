@@ -237,14 +237,24 @@ int main(int argc, char **argv) {
 	REQUIRE(mount("sandbox", CHROOT_MNT "/var", "", MS_BIND, "") == 0);
 
 #ifdef TEMPEST_ROSETTA_COMPAT
-	/* Mount procfs in the sandbox. This is needed for:
-	 * - /proc/cpuinfo: runtime environments inspect this
-	 * - /proc/self/exe: required by Rosetta for x86_64 binary translation
-	 *
-	 * hidepid=2 ensures processes can only see their own /proc/[pid] entries,
-	 * preventing information disclosure about other processes in the sandbox.
+	/* Mount minimal /proc with only PID entries visible.
+	 * - subset=pid: hides all top-level files (/proc/meminfo, /proc/sys, etc.)
+	 *   This normalizes the environment closer to native Linux sandbox.
+	 * - hidepid=2: processes can only see their own /proc/[pid] entries
+	 * - /proc/self/exe remains accessible (required by Rosetta)
 	 */
-	REQUIRE(mount("proc", CHROOT_MNT "/proc", "proc", MS_NOSUID|MS_NODEV|MS_NOEXEC, "hidepid=2") == 0);
+	REQUIRE(mount("proc", CHROOT_MNT "/proc", "proc",
+		MS_NOSUID|MS_NODEV|MS_NOEXEC, "subset=pid,hidepid=2") == 0);
+
+	/* Create mountpoint for cpuinfo and bind-mount it.
+	 * Runtime environments typically inspect /proc/cpuinfo, but subset=pid
+	 * hides it. We explicitly bind-mount it to match native Linux behavior. */
+	{
+		int cpuinfo_fd = open(CHROOT_MNT "/proc/cpuinfo", O_CREAT|O_WRONLY, 0444);
+		REQUIRE(cpuinfo_fd >= 0);
+		close(cpuinfo_fd);
+	}
+	REQUIRE(mount("/proc/cpuinfo", CHROOT_MNT "/proc/cpuinfo", "", MS_BIND, "") == 0);
 #else
 	/* Bind-mount only cpuinfo. Runtime environments typically inspect this. */
 	REQUIRE(mount("/proc/cpuinfo", CHROOT_MNT "/proc/cpuinfo", "", MS_BIND, "") == 0);
