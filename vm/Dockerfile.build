@@ -1,0 +1,42 @@
+# Dockerfile for building Tempest VM components (sandbox-launcher, initramfs)
+# Build once with: docker build -t tempest-vm-builder -f vm/Dockerfile.build .
+# Then use for fast rebuilds
+
+# Use gcc image which has build tools pre-installed (much faster than apt-get)
+FROM gcc:12
+
+# Only need to install a few extra packages (Debian mirrors are faster)
+RUN apt-get update && \
+    apt-get install -y \
+        flex \
+        bison \
+        bc \
+        libelf-dev \
+        libssl-dev \
+        cpio \
+        gcc-x86-64-linux-gnu \
+        strace \
+    && rm -rf /var/lib/apt/lists/*
+
+# Build strace statically
+RUN mkdir -p /opt/strace && cd /opt/strace && \
+    curl -L -o strace.tar.xz https://github.com/strace/strace/releases/download/v6.12/strace-6.12.tar.xz && \
+    tar xf strace.tar.xz && \
+    cd strace-6.12 && \
+    ./configure --enable-mpers=no LDFLAGS="-static" && \
+    make -j$(nproc) && \
+    cp src/strace /opt/strace/strace-static && \
+    cd /opt/strace && rm -rf strace-6.12 strace.tar.xz
+
+# Pre-build bpf_asm so it's cached
+RUN mkdir -p /opt/bpf_build && \
+    cd /opt/bpf_build && \
+    curl -L -o linux.tar.xz https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.6.70.tar.xz && \
+    tar xf linux.tar.xz && \
+    cd linux-6.6.70/tools/bpf && \
+    make bpf_asm && \
+    cp bpf_asm /opt/bpf_build/ && \
+    cd /opt/bpf_build && \
+    rm -rf linux-6.6.70 linux.tar.xz
+
+WORKDIR /src

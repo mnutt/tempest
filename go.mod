@@ -1,8 +1,8 @@
 module sandstorm.org/go/tempest
 
-go 1.22
+go 1.22.0
 
-toolchain go1.23.3
+toolchain go1.24.4
 
 // NOTE: this *must not* be updated to v1.11; that version drops support for
 // version 2 of the wire protocol, which is the most recent supported by the
@@ -22,8 +22,9 @@ require (
 	github.com/tj/assert v0.0.3
 	github.com/ulikunitz/xz v0.5.10
 	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8
-	golang.org/x/crypto v0.5.0
+	golang.org/x/crypto v0.31.0
 	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
+	golang.org/x/net v0.25.0
 	golang.org/x/sys v0.29.0
 	zenhack.net/go/jsapi v0.0.0-20230418065259-200f45ece3f9
 	zenhack.net/go/tea v0.0.0-20230524023758-356c069b5d8c
@@ -34,9 +35,10 @@ require (
 // NOTE: We don't use this package directly; it is pulled in by lego, but lego
 // asks for version 0.2.0, which causes a build error that is fixed
 // by updating to 0.2.1; see https://github.com/googleapis/google-cloud-go/issues/6956
-require cloud.google.com/go/compute/metadata v0.2.1
+require cloud.google.com/go/compute/metadata v0.2.1 // indirect
 
 require (
+	cloud.google.com/go/compute v1.12.1 // indirect
 	github.com/Azure/azure-sdk-for-go v32.4.0+incompatible // indirect
 	github.com/Azure/go-autorest v14.2.0+incompatible // indirect
 	github.com/Azure/go-autorest/autorest v0.11.24 // indirect
@@ -48,6 +50,8 @@ require (
 	github.com/Azure/go-autorest/autorest/validation v0.3.1 // indirect
 	github.com/Azure/go-autorest/logger v0.2.1 // indirect
 	github.com/Azure/go-autorest/tracing v0.6.0 // indirect
+	github.com/Code-Hex/go-infinity-channel v1.0.0 // indirect
+	github.com/Code-Hex/vz/v3 v3.7.1 // indirect
 	github.com/OpenDNS/vegadns2client v0.0.0-20180418235048-a3fa4a771d87 // indirect
 	github.com/akamai/AkamaiOPEN-edgegrid-golang v1.2.1 // indirect
 	github.com/aliyun/alibaba-cloud-sdk-go v1.61.1755 // indirect
@@ -75,7 +79,8 @@ require (
 	github.com/golang/snappy v0.0.1 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect
-	github.com/googleapis/gax-go/v2 v2.0.5 // indirect
+	github.com/googleapis/enterprise-certificate-proxy v0.2.0 // indirect
+	github.com/googleapis/gax-go/v2 v2.6.0 // indirect
 	github.com/gophercloud/gophercloud v1.0.0 // indirect
 	github.com/gophercloud/utils v0.0.0-20210216074907-f6de111f2eae // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
@@ -137,16 +142,16 @@ require (
 	github.com/youmark/pkcs8 v0.0.0-20181117223130-1be2e3e5546d // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.uber.org/ratelimit v0.2.0 // indirect
-	golang.org/x/mod v0.6.0 // indirect
-	golang.org/x/net v0.5.0 // indirect
+	golang.org/x/mod v0.22.0 // indirect
 	golang.org/x/oauth2 v0.4.0 // indirect
-	golang.org/x/sync v0.1.0 // indirect
+	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/term v0.28.0 // indirect
-	golang.org/x/text v0.6.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
-	golang.org/x/tools v0.2.0 // indirect
-	google.golang.org/api v0.47.0 // indirect
+	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d // indirect
+	google.golang.org/api v0.100.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
+	google.golang.org/genproto v0.0.0-20221024183307-1bc688fe9f3e // indirect
 	google.golang.org/grpc v1.51.0 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/ini.v1 v1.66.6 // indirect

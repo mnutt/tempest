@@ -28,6 +28,9 @@ func init() {
 }
 
 type ContainerSet struct {
+	// Backend is the container backend used to spawn grains.
+	Backend container.Backend
+
 	// map of grain id to already-running container. TODO:
 	//
 	// - We really want some kind of weakmap semantics here; this doesn't
@@ -46,6 +49,7 @@ func (cset *ContainerSet) Get(ctx context.Context, lg *slog.Logger, db database.
 	c, err := container.Command{
 		Log:     lg,
 		DB:      db,
+		Backend: cset.Backend,
 		GrainID: grainID,
 		Api:     api,
 		Args:    []string{continueArg},

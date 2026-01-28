@@ -1,4 +1,4 @@
-#!/usr/bin/sh
+#!/bin/sh
 
 # Tempest
 # Copyright (c) 2024, 2025 Sandstorm Development Team and contributors
@@ -41,12 +41,30 @@
 [ -z "${DOWNLOAD_USER_AGENT}" ] && DOWNLOAD_USER_AGENT="tempest-bootstrap-build-tool"
 
 script_dir="$(cd "$(dirname "$0")" && pwd)"
-toolchain_dir="$(cd "${script_dir}"/.. && pwd)/toolchain"
+[ -z "${TOOLCHAIN_DIR}" ] && TOOLCHAIN_DIR="$(cd "${script_dir}"/.. && pwd)/toolchain"
+toolchain_dir="${TOOLCHAIN_DIR}"
 
-go_version="1.25.3"
-go_destination_file="go${go_version}.linux-amd64.tar.gz"
+go_version="1.25.6"
+
+# Detect OS and architecture, set SHA256 checksum
+case "$(uname -s)-$(uname -m)" in
+	Linux-x86_64)
+		go_os="linux"
+		go_arch="amd64"
+		go_expected_sha256="f022b6aad78e362bcba9b0b94d09ad58c5a70c6ba3b7582905fababf5fe0181a"
+		;;
+	Darwin-arm64)
+		go_os="darwin"
+		go_arch="arm64"
+		go_expected_sha256="984521ae978a5377c7d782fd2dd953291840d7d3d0bd95781a1f32f16d94a006"
+		;;
+	*)
+		fail 19 "Unsupported platform: $(uname -s)-$(uname -m). Only linux-amd64 and darwin-arm64 are supported."
+		;;
+esac
+
+go_destination_file="go${go_version}.${go_os}-${go_arch}.tar.gz"
 go_download_url="https://go.dev/dl/${go_destination_file}"
-go_expected_sha256="0335f314b6e7bfe08c3d0cfaa7c19db961b7b99fb20be62b0a826c992ad14e0f"
 go_downloaded_file="${DOWNLOAD_CACHE_DIR}/${go_destination_file}"
 go_install_dir="${toolchain_dir}/go-${go_version}"
 go_executable_file="go-${go_version}/bin/go"
@@ -88,7 +106,7 @@ check_for_prerequisites() {
 
 # Create the download cache directory if it does not exist.
 create_download_cache_dir() {
-	mkdir --parents "${DOWNLOAD_CACHE_DIR}"
+	mkdir -p "${DOWNLOAD_CACHE_DIR}"
 }
 
 # Create the toolchain.toml file if it does not exist.
@@ -122,9 +140,9 @@ download_go() {
 extract_go() {
 	downloaded_file="$1"
 	destination_path="$2"
-	mkdir --parents "${destination_path}"
-	# Using short options with tar for macOS compatibility
-	if ! gunzip --stdout "${downloaded_file}" | tar -C "${destination_path}" -x; then
+	mkdir -p "${destination_path}"
+	# Using short options for POSIX/macOS compatibility
+	if ! gunzip -c "${downloaded_file}" | tar -C "${destination_path}" -x; then
 		fail 15 "Failed to extract \"${downloaded_file}\" to \"${destination_path}\"."
 	fi
 	# Go gives us ${destination_path}/go/...
@@ -190,6 +208,12 @@ verify_sha256() {
 	expected_sha256="$1"
 	file_path="$2"
 
+	# Skip verification if no expected checksum provided
+	if [ -z "${expected_sha256}" ]; then
+		printf 'Warning: SHA256 verification skipped (no checksum for this platform)\n'
+		return 0
+	fi
+
 	# Build an SHA256SUMS file for the downloaded file.
 	file_dir=$(dirname "${file_path}")
 	file_name=$(basename "${file_path}")
@@ -203,10 +227,10 @@ verify_sha256() {
 	pwd=$(pwd)
 	cd "${file_dir}" || fail 2 "Failed to change to download directory."
 	if command -v sha256sum >/dev/null 2>/dev/null; then
-		sha256sum --check "${sha256sum_path}"
+		sha256sum -c "${sha256sum_path}"
 		sha256_rc=$?
 	elif command -v shasum >/dev/null 2>/dev/null; then
-		shasum --algorithm 256 --check "${sha256sum_path}"
+		shasum -a 256 -c "${sha256sum_path}"
 		sha256_rc=$?
 	else
 		fail 11 "The sha256sum or shasum command, required to use this script, is not found."

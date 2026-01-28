@@ -122,7 +122,7 @@ func spawnSpkCmd(lg *slog.Logger, appTitle string, spkCmd spk.Manifest_Command) 
 	cmd, err := parseCmd(spkCmd)
 	util.Chkfatal(err)
 
-	lg.Info("Starting up app",
+	lg.Info("Starting app",
 		"appTitle", appTitle,
 		"command", cmd.Args,
 	)

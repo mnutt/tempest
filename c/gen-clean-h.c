@@ -76,11 +76,13 @@ int main(void) {
   // constants from linux/audit.h -- architecture constants
   DEF(AUDIT_ARCH_I386);
   DEF(AUDIT_ARCH_X86_64);
+  DEF(AUDIT_ARCH_AARCH64);
 
   // constants from linux/seccomp.h -- seccomp return values
   DEF(SECCOMP_RET_ALLOW);
   DEF(SECCOMP_RET_ERRNO);
   DEF(SECCOMP_RET_KILL);
+  DEF(SECCOMP_RET_LOG);
   DEF(SECCOMP_RET_TRACE);
   DEF(SECCOMP_RET_TRAP);
 
