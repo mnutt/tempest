@@ -84,6 +84,12 @@
 
 #include <linux/seccomp.h>
 
+/* dirent for /proc enumeration */
+#include <dirent.h>
+
+/* Rosetta compatibility (Apple Silicon x86_64 translation) */
+#include "rosetta.h"
+
 #define SANDSTORM_STATE   LOCALSTATEDIR "/sandstorm"
 #define TEMPEST_LIBEXEC LIBEXECDIR    "/tempest"
 
@@ -187,7 +193,9 @@ int main(int argc, char **argv) {
 		CLONE_SYSVSEM) == 0);
 
 	/* No, really, unshare the mounts. See the "SHARED SUBTREES" section of mount_namespaces(7)
-	   for details. */
+	   for details. MS_PRIVATE ensures complete isolation - no mount events propagate in/out.
+	   For Rosetta compatibility, the VM init makes the Rosetta mount private before we run,
+	   so we don't need MS_SLAVE here - we bind-mount Rosetta explicitly below. */
 	REQUIRE(mount("", "/", "", MS_REC|MS_PRIVATE, "") == 0);
 
 	/* Set up a loopback interface in the new network namespace. */
@@ -213,19 +221,28 @@ int main(int argc, char **argv) {
 		close(sockfd);
 	}
 
-	/* Mount the image read only, then mount the sandbox's storage in the image's /var. */
+	/* Mount the image, create necessary directories, then remount read-only. */
 	REQUIRE(chdir(IMAGE_DIR) == 0);
 	REQUIRE(mount(image_id, CHROOT_MNT, "", MS_BIND, "") == 0);
+
 	REQUIRE(mount("", CHROOT_MNT, "", MS_REMOUNT|MS_BIND|MS_RDONLY, "") == 0);
 	REQUIRE(chdir(SANDBOX_DIR) == 0);
 	REQUIRE(chdir(sandbox_id) == 0);
 	REQUIRE(mount("sandbox", CHROOT_MNT "/var", "", MS_BIND, "") == 0);
 
-	/* Bind-mount the host's cpuinfo. It's typical for runtime environments to inspect this. */
+#ifdef TEMPEST_ROSETTA_COMPAT
+	REQUIRE(rosetta_setup_proc(CHROOT_MNT) == 0);
+#else
+	/* Bind-mount only cpuinfo. Runtime environments typically inspect this. */
 	REQUIRE(mount("/proc/cpuinfo", CHROOT_MNT "/proc/cpuinfo", "", MS_BIND, "") == 0);
+#endif
 
 	/* Supply a small /tmp. */
 	REQUIRE(mount("none", CHROOT_MNT "/tmp", "tmpfs", MS_NODEV|MS_NOSUID, "size=16m") == 0);
+
+#ifdef TEMPEST_ROSETTA_COMPAT
+	rosetta_mount(CHROOT_MNT);
+#endif
 
 	/* Set up /dev; a read-only tmpfs with a minimal set of devices. */
 	REQUIRE(mount("none", CHROOT_MNT "/dev", "tmpfs", MS_NOSUID, "") == 0);
@@ -376,9 +393,8 @@ int main(int argc, char **argv) {
 		/* We're the child. Reset the signal mask and launch the agent. */
 		REQUIRE(sigprocmask(SIG_UNBLOCK, &set, 0) == 0);
 
-		/* TODO: document what's going on here. */
+		/* Start a new session so we can be a proper init. */
 		REQUIRE(setsid() != -1);
-		//REQUIRE(setpgid(0, 0) == 0);
 
 		// Re-use the arguments in argv after the ones we used. Swap out the program
 		// name.

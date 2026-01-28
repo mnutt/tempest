@@ -1,10 +1,10 @@
 #include <sys/syscall.h>
 #include "constants.h"
+#include "syscall-compat.h"
 
 // Offsets to parts of `struct seccomp_data` (defined in
-// `linux/seccomp.h`). NOTE: this asumes a little-endian machine,
-// which is valid for x86_64 -- but we should sanity check this
-// if/when we port to other architectures.
+// `linux/seccomp.h`). NOTE: this assumes a little-endian machine,
+// which is valid for x86_64 and aarch64.
 //
 #define OFF_NR 0 // The syscall number.
 #define OFF_ARCH 4 // The architecture for the syscall.
@@ -20,10 +20,19 @@
 #define OFF_ARG_2_HI 36
 // Args can go up to 6, but we don't need more than this yet.
 
+// Select the correct architecture constant based on build target
+#if defined(__aarch64__)
+#define NATIVE_AUDIT_ARCH AUDIT_ARCH_AARCH64
+#elif defined(__x86_64__)
+#define NATIVE_AUDIT_ARCH AUDIT_ARCH_X86_64
+#else
+#error "Unsupported architecture"
+#endif
+
 start:
     // Deny non-native syscalls:
     ld [OFF_ARCH]
-    jne #AUDIT_ARCH_X86_64, enosys_near
+    jne #NATIVE_AUDIT_ARCH, enosys_near
 
     // Examine the syscall number.
     ld [OFF_NR]
@@ -252,6 +261,23 @@ sys_ioctl:
     jne #0, einval
 
     ld [OFF_ARG_1_LO]
+
+#ifdef TEMPEST_ROSETTA_COMPAT
+    // Rosetta x86_64 binary translation ioctls (Apple Virtualization.framework)
+    //
+    // These ioctls were identified via strace on actual x86_64 binary execution.
+    // All use type 0x61 ('a'), which is registered for ATM/QAT in Linux but
+    // neither exists in Apple VMs - these are Rosetta-specific ioctls.
+    //
+    // _IOC(_IOC_READ, 0x61, 0x22, 0x45) - verification ioctl
+    jeq #0x80456122, allow
+    // _IOC(_IOC_READ, 0x61, 0x23, 0x80) - runtime translation
+    jeq #0x80806123, allow
+    // _IOC(_IOC_NONE, 0x61, 0x24, 0) - runtime control
+    jeq #0x00006124, allow
+    // _IOC(_IOC_READ, 0x61, 0x25, 0x45) - runtime verification
+    jeq #0x80456125, allow
+#endif
 
     // These can be used to toggle close-on-exec:
     jeq #FIOCLEX, allow

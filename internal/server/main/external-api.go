@@ -404,6 +404,7 @@ func (pc pkgController) Create(ctx context.Context, p external.Package_Controlle
 		c, err := container.Command{
 			Log:     pc.server.log,
 			DB:      pc.server.db,
+			Backend: pc.server.backend,
 			GrainID: grainID,
 			Api:     grain.SandstormApi_ServerToClient(sandstormApiImpl{}),
 			Args:    []string{startArg},

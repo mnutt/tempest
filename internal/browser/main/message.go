@@ -290,6 +290,12 @@ func (msg NewAppPkgFile) Update(m *Model) Cmd {
 			sendMsg(NewError{Err: err})
 			return
 		}
+		if !userSess.IsValid() {
+			sendMsg(NewError{
+				Err: errors.New("You don't have permission to install apps"),
+			})
+			return
+		}
 		defer userSess.Release()
 		c := js.Global().Get("console")
 		c.Call("log", msg.Name, msg.Size, msg.Reader.Value)
