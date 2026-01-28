@@ -232,7 +232,7 @@ func getCapnProtoConfig(buildToolConfig *RuntimeConfigBuildTool) (*capnProtoConf
 
 func makeCapnProto(capnProtoDir string) error {
 	cmd := exec.Command("make")
-	cmd.Args = append(cmd.Args, "check")
+	cmd.Args = append(cmd.Args, "-j", "check")
 	cmd.Dir = capnProtoDir
 	cmd.Env = append(cmd.Env, os.Environ()...)
 	cmd.Stdout = os.Stdout
