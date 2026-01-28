@@ -84,6 +84,12 @@
 
 #include <linux/seccomp.h>
 
+/* dirent for /proc enumeration */
+#include <dirent.h>
+
+/* Rosetta compatibility (Apple Silicon x86_64 translation) */
+#include "rosetta.h"
+
 #define SANDSTORM_STATE   LOCALSTATEDIR "/sandstorm"
 #define TEMPEST_LIBEXEC LIBEXECDIR    "/tempest"
 
@@ -225,31 +231,7 @@ int main(int argc, char **argv) {
 	REQUIRE(mount("sandbox", CHROOT_MNT "/var", "", MS_BIND, "") == 0);
 
 #ifdef TEMPEST_ROSETTA_COMPAT
-	/* Mount procfs in the sandbox. This is needed for:
-	 * - /proc/cpuinfo: runtime environments inspect this
-	 * - /proc/self/exe: required by Rosetta for x86_64 binary translation
-	 *
-	 * hidepid=2 ensures processes can only see their own /proc/[pid] entries,
-	 * preventing information disclosure about other processes in the sandbox.
-	 *
-	 * Note: We can't use subset=pid because it hides /proc/cpuinfo and we can't
-	 * create files on procfs to bind-mount over. Instead, we mask sensitive
-	 * entries after mounting. */
-	REQUIRE(mount("proc", CHROOT_MNT "/proc", "proc",
-		MS_NOSUID|MS_NODEV|MS_NOEXEC, "hidepid=2") == 0);
-
-	/* Mask sensitive /proc entries by bind-mounting /dev/null or empty tmpfs.
-	 * This reduces information disclosure while keeping /proc/cpuinfo,
-	 * /proc/self/exe, and /proc/sys (needed by apps) accessible.
-	 * Note: These mounts are best-effort; some entries may not exist. */
-	mount("/dev/null", CHROOT_MNT "/proc/kcore", "", MS_BIND, "");
-	mount("/dev/null", CHROOT_MNT "/proc/sched_debug", "", MS_BIND, "");
-	mount("/dev/null", CHROOT_MNT "/proc/timer_list", "", MS_BIND, "");
-	mount("/dev/null", CHROOT_MNT "/proc/kallsyms", "", MS_BIND, "");
-	mount("/dev/null", CHROOT_MNT "/proc/keys", "", MS_BIND, "");
-	mount("/dev/null", CHROOT_MNT "/proc/key-users", "", MS_BIND, "");
-	/* Note: /proc/sys is left accessible - apps need /proc/sys/vm/mmap_min_addr etc. */
-	mount("tmpfs", CHROOT_MNT "/proc/acpi", "tmpfs", MS_RDONLY|MS_NOSUID|MS_NODEV|MS_NOEXEC, "size=0");
+	REQUIRE(rosetta_setup_proc(CHROOT_MNT) == 0);
 #else
 	/* Bind-mount only cpuinfo. Runtime environments typically inspect this. */
 	REQUIRE(mount("/proc/cpuinfo", CHROOT_MNT "/proc/cpuinfo", "", MS_BIND, "") == 0);
@@ -259,25 +241,7 @@ int main(int argc, char **argv) {
 	REQUIRE(mount("none", CHROOT_MNT "/tmp", "tmpfs", MS_NODEV|MS_NOSUID, "size=16m") == 0);
 
 #ifdef TEMPEST_ROSETTA_COMPAT
-	/* Mount Rosetta for x86_64 binary translation.
-	 * Try bind mount from VM's existing mount first - this preserves the virtiofs ioctl context.
-	 * Fall back to direct virtiofs mount if bind mount fails.
-	 * Apply MS_NOSUID|MS_NODEV|MS_NOEXEC for defense in depth (Rosetta binary is still
-	 * executable because it was opened before these flags are applied via binfmt_misc F flag). */
-	if (mkdir(CHROOT_MNT "/tmp/rosetta", 0755) == 0) {
-		int mounted = 0;
-		/* Try bind mount from existing VM mount first */
-		if (mount("/tmp/rosetta", CHROOT_MNT "/tmp/rosetta", "", MS_BIND, "") == 0) {
-			mounted = 1;
-		} else if (mount("rosetta", CHROOT_MNT "/tmp/rosetta", "virtiofs", MS_NOSUID|MS_NODEV, "") == 0) {
-			/* Fall back to direct virtiofs mount */
-			mounted = 1;
-		}
-		/* Apply restrictive flags via remount (bind mounts require this) */
-		if (mounted) {
-			mount("", CHROOT_MNT "/tmp/rosetta", "", MS_REMOUNT|MS_BIND|MS_RDONLY|MS_NOSUID|MS_NODEV, "");
-		}
-	}
+	rosetta_mount(CHROOT_MNT);
 #endif
 
 	/* Set up /dev; a read-only tmpfs with a minimal set of devices. */
