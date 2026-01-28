@@ -187,22 +187,10 @@ int main(int argc, char **argv) {
 		CLONE_SYSVSEM) == 0);
 
 	/* No, really, unshare the mounts. See the "SHARED SUBTREES" section of mount_namespaces(7)
-	   for details. */
-#ifdef TEMPEST_ROSETTA_COMPAT
-	/* We use MS_SLAVE instead of MS_PRIVATE for virtiofs/Rosetta compatibility.
-	   Trade-offs:
-	   - MS_PRIVATE: Complete isolation, no mount events propagate in/out
-	   - MS_SLAVE: Parent mount events propagate in, ours don't propagate out
-
-	   MS_SLAVE is required because Rosetta needs /proc/self/exe to be accessible,
-	   and this fails with MS_PRIVATE (tested: "rosetta error: Unable to open
-	   /proc/self/exe: 2"). The security impact is minimal: parent unmounts could
-	   affect us, but the parent is the VM init which doesn't unmount during normal
-	   operation. Our mounts still don't leak to parent. */
-	REQUIRE(mount("", "/", "", MS_REC|MS_SLAVE, "") == 0);
-#else
+	   for details. MS_PRIVATE ensures complete isolation - no mount events propagate in/out.
+	   For Rosetta compatibility, the VM init makes the Rosetta mount private before we run,
+	   so we don't need MS_SLAVE here - we bind-mount Rosetta explicitly below. */
 	REQUIRE(mount("", "/", "", MS_REC|MS_PRIVATE, "") == 0);
-#endif
 
 	/* Set up a loopback interface in the new network namespace. */
 	{
@@ -237,24 +225,31 @@ int main(int argc, char **argv) {
 	REQUIRE(mount("sandbox", CHROOT_MNT "/var", "", MS_BIND, "") == 0);
 
 #ifdef TEMPEST_ROSETTA_COMPAT
-	/* Mount minimal /proc with only PID entries visible.
-	 * - subset=pid: hides all top-level files (/proc/meminfo, /proc/sys, etc.)
-	 *   This normalizes the environment closer to native Linux sandbox.
-	 * - hidepid=2: processes can only see their own /proc/[pid] entries
-	 * - /proc/self/exe remains accessible (required by Rosetta)
-	 */
+	/* Mount procfs in the sandbox. This is needed for:
+	 * - /proc/cpuinfo: runtime environments inspect this
+	 * - /proc/self/exe: required by Rosetta for x86_64 binary translation
+	 *
+	 * hidepid=2 ensures processes can only see their own /proc/[pid] entries,
+	 * preventing information disclosure about other processes in the sandbox.
+	 *
+	 * Note: We can't use subset=pid because it hides /proc/cpuinfo and we can't
+	 * create files on procfs to bind-mount over. Instead, we mask sensitive
+	 * entries after mounting. */
 	REQUIRE(mount("proc", CHROOT_MNT "/proc", "proc",
-		MS_NOSUID|MS_NODEV|MS_NOEXEC, "subset=pid,hidepid=2") == 0);
+		MS_NOSUID|MS_NODEV|MS_NOEXEC, "hidepid=2") == 0);
 
-	/* Create mountpoint for cpuinfo and bind-mount it.
-	 * Runtime environments typically inspect /proc/cpuinfo, but subset=pid
-	 * hides it. We explicitly bind-mount it to match native Linux behavior. */
-	{
-		int cpuinfo_fd = open(CHROOT_MNT "/proc/cpuinfo", O_CREAT|O_WRONLY, 0444);
-		REQUIRE(cpuinfo_fd >= 0);
-		close(cpuinfo_fd);
-	}
-	REQUIRE(mount("/proc/cpuinfo", CHROOT_MNT "/proc/cpuinfo", "", MS_BIND, "") == 0);
+	/* Mask sensitive /proc entries by bind-mounting /dev/null or empty tmpfs.
+	 * This reduces information disclosure while keeping /proc/cpuinfo,
+	 * /proc/self/exe, and /proc/sys (needed by apps) accessible.
+	 * Note: These mounts are best-effort; some entries may not exist. */
+	mount("/dev/null", CHROOT_MNT "/proc/kcore", "", MS_BIND, "");
+	mount("/dev/null", CHROOT_MNT "/proc/sched_debug", "", MS_BIND, "");
+	mount("/dev/null", CHROOT_MNT "/proc/timer_list", "", MS_BIND, "");
+	mount("/dev/null", CHROOT_MNT "/proc/kallsyms", "", MS_BIND, "");
+	mount("/dev/null", CHROOT_MNT "/proc/keys", "", MS_BIND, "");
+	mount("/dev/null", CHROOT_MNT "/proc/key-users", "", MS_BIND, "");
+	/* Note: /proc/sys is left accessible - apps need /proc/sys/vm/mmap_min_addr etc. */
+	mount("tmpfs", CHROOT_MNT "/proc/acpi", "tmpfs", MS_RDONLY|MS_NOSUID|MS_NODEV|MS_NOEXEC, "size=0");
 #else
 	/* Bind-mount only cpuinfo. Runtime environments typically inspect this. */
 	REQUIRE(mount("/proc/cpuinfo", CHROOT_MNT "/proc/cpuinfo", "", MS_BIND, "") == 0);

@@ -92,6 +92,10 @@ cat > /newroot/bin/start-daemon.sh << 'STARTUP_EOF'
 #!/bin/sh
 # Register Rosetta for x86_64 binary translation
 if [ -f /tmp/rosetta/rosetta ]; then
+    # Make Rosetta mount private so sandboxes don't rely on MS_SLAVE propagation.
+    # Sandboxes will bind-mount it explicitly with MS_PRIVATE.
+    mount --make-private /tmp/rosetta 2>/dev/null || true
+
     if mount -t binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc 2>/dev/null; then
         # Register with F flag - kernel keeps interpreter fd open
         # O=open-binary, C=credentials, F=fix-binary (pre-open interpreter)
