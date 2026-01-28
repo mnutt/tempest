@@ -123,6 +123,7 @@ func (Bootstrap) All() error {
 		Bootstrap.GoCapnp,
 		Bootstrap.BpfAsm,
 		Bootstrap.TinyGo,
+		Bootstrap.Binaryen,
 	)
 	return nil
 }

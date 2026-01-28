@@ -250,7 +250,11 @@ func buildWebui(r *BuildRecord, cfg Config) error {
 			tinyGo = "tinygo"
 		}
 
-		if err := sh.RunV(tinyGo, "build",
+		wasmOpt := getToolchainWasmOpt()
+		env := map[string]string{
+			"WASMOPT": wasmOpt,
+		}
+		if err := sh.RunWith(env, tinyGo, "build",
 			"-target", "wasm",
 			"-panic", "trap",
 			"-no-debug",
@@ -405,8 +409,8 @@ func maybeConfigure() {
 
 // runConfigure creates the default configuration
 func runConfigure(args []string) {
-	// TinyGo prebuilt binaries are only available for Linux
-	useTinyGo := runtime.GOOS == "linux"
+	// TinyGo prebuilt binaries are available for Linux and macOS arm64
+	useTinyGo := runtime.GOOS == "linux" || (runtime.GOOS == "darwin" && runtime.GOARCH == "arm64")
 
 	cfg := Config{
 		User:   "sandstorm",
@@ -439,7 +443,7 @@ func readConfig() Config {
 	var c Config
 	data, err := os.ReadFile("config.json")
 	if err != nil {
-		// Return defaults (TinyGo only available on Linux)
+		// Return defaults (TinyGo available on Linux and macOS arm64)
 		return Config{
 			User:          "sandstorm",
 			Group:         "sandstorm",
@@ -448,10 +452,14 @@ func readConfig() Config {
 			Libexecdir:    "/usr/local/libexec",
 			Localstatedir: "/usr/local/var/lib",
 			WithGoCapnp:   filepath.Join(toolchainDir, fmt.Sprintf("go-capnp-%s", goCapnpVersion)),
-			TinyGo:        runtime.GOOS == "linux",
+			TinyGo:        runtime.GOOS == "linux" || (runtime.GOOS == "darwin" && runtime.GOARCH == "arm64"),
 		}
 	}
 	json.Unmarshal(data, &c)
+	// Apply defaults for empty values
+	if c.WithGoCapnp == "" {
+		c.WithGoCapnp = filepath.Join(toolchainDir, fmt.Sprintf("go-capnp-%s", goCapnpVersion))
+	}
 	return c
 }
 

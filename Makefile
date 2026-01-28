@@ -45,6 +45,8 @@ TEMPEST_SANDBOX_LAUNCHER_GEN := \
 TEMPEST_SANDBOX_LAUNCHER_OBJ := c/sandbox-launcher.o
 TINYGO_VERSION := 0.37.0
 TINYGO := $(TOOLCHAIN_DIR)/tinygo-$(TINYGO_VERSION)/bin/tinygo
+BINARYEN_VERSION := 125
+BINARYEN := $(TOOLCHAIN_DIR)/binaryen-version_$(BINARYEN_VERSION)/bin/wasm-opt
 
 ##
 ## Targets
@@ -180,7 +182,7 @@ check: all
 #
 
 .PHONY: toolchain
-toolchain: $(BISON) $(BPF_ASM) $(CAPNP) $(FLEX) $(GO) $(GOCAPNP) $(TINYGO)
+toolchain: $(BINARYEN) $(BISON) $(BPF_ASM) $(CAPNP) $(FLEX) $(GO) $(GOCAPNP) $(TINYGO)
 
 $(BISON): $(BUILDTOOL)
 	@echo Building Bison $(BISON_VERSION)
@@ -220,6 +222,10 @@ $(GOPATH_DIR):
 $(TINYGO): $(BUILDTOOL)
 	@echo Setting up TinyGo $(TINYGO_VERSION)
 	$(BUILDTOOL) bootstrap-tinygo
+
+$(BINARYEN): $(BUILDTOOL)
+	@echo Setting up Binaryen $(BINARYEN_VERSION)
+	$(BUILDTOOL) bootstrap-binaryen
 
 capnp/%/%.capnp.go: $(BUILDTOOL) $(CAPNP) $(GOCAPNP) capnp/%.capnp
 	$(BUILDTOOL) generate-capnp

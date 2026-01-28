@@ -14,12 +14,13 @@ import (
 
 // Tool versions (matching Makefile)
 const (
-	bisonVersion   = "3.8.2"
-	bpfAsmVersion  = "6.13.8"
-	capnpVersion   = "1.1.0"
-	flexVersion    = "2.6.4"
-	goCapnpVersion = "3.1.0-alpha.1"
-	tinyGoVersion  = "0.37.0"
+	binaryenVersion = "125"
+	bisonVersion    = "3.8.2"
+	bpfAsmVersion   = "6.13.8"
+	capnpVersion    = "1.1.0"
+	flexVersion     = "2.6.4"
+	goCapnpVersion  = "3.1.0-alpha.1"
+	tinyGoVersion   = "0.37.0"
 )
 
 // Bison builds bison from source
@@ -122,6 +123,31 @@ func (Bootstrap) TinyGo() error {
 
 	fmt.Printf("Setting up TinyGo %s...\n", tinyGoVersion)
 	return runBuildTool("bootstrap-tinygo")
+}
+
+// Binaryen sets up Binaryen (wasm-opt)
+func (Bootstrap) Binaryen() error {
+	mg.Deps(Bootstrap.Go)
+
+	binaryenDir := filepath.Join(toolchainDir, fmt.Sprintf("binaryen-version_%s", binaryenVersion))
+	wasmOptExe := filepath.Join(binaryenDir, "bin", "wasm-opt")
+
+	if _, err := os.Stat(wasmOptExe); err == nil {
+		fmt.Printf("Binaryen %s already installed\n", binaryenVersion)
+		return nil
+	}
+
+	fmt.Printf("Setting up Binaryen %s...\n", binaryenVersion)
+	return runBuildTool("bootstrap-binaryen")
+}
+
+// getToolchainWasmOpt returns the path to the toolchain wasm-opt executable
+func getToolchainWasmOpt() string {
+	wasmOptPath := filepath.Join(toolchainDir, fmt.Sprintf("binaryen-version_%s", binaryenVersion), "bin", "wasm-opt")
+	if _, err := os.Stat(wasmOptPath); err == nil {
+		return wasmOptPath
+	}
+	return "wasm-opt" // fall back to system
 }
 
 // runBuildTool runs the build-tool with the specified command
