@@ -142,6 +142,7 @@ start:
     jeq #SYS_rt_sigpending, allow_near
     jeq #SYS_rt_sigprocmask, allow_near
     jeq #SYS_rt_sigqueueinfo, allow_near
+    jeq #SYS_rt_tgsigqueueinfo, allow_near
     jeq #SYS_rt_sigreturn, allow_near
     jeq #SYS_rt_sigsuspend, allow_near
     jeq #SYS_rt_sigtimedwait, allow_near
