@@ -74,10 +74,7 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 }
 
 func (h Handler) doWebsocket(w http.ResponseWriter, req *http.Request) {
-	clientProtos := strings.Split(req.Header.Get("Sec-WebSocket-Protocol"), ",")
-	for i, p := range clientProtos {
-		clientProtos[i] = strings.TrimSpace(p)
-	}
+	clientProtos := parseWebSocketProtocols(req.Header.Get("Sec-WebSocket-Protocol"))
 	streamPromise, streamResolver := capnp.NewLocalPromise[websession.WebSocketStream]()
 	fut, rel := h.Session.OpenWebSocket(
 		req.Context(),
@@ -862,6 +859,21 @@ func replyErr(w http.ResponseWriter, err error) {
 
 	w.WriteHeader(http.StatusInternalServerError)
 	w.Write([]byte(err.Error()))
+}
+
+func parseWebSocketProtocols(header string) []string {
+	if strings.TrimSpace(header) == "" {
+		return nil
+	}
+	raw := strings.Split(header, ",")
+	protocols := make([]string, 0, len(raw))
+	for _, p := range raw {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			protocols = append(protocols, p)
+		}
+	}
+	return protocols
 }
 
 // placeContext populates a websession context based on the request, using the supplied

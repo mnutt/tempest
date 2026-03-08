@@ -76,6 +76,16 @@ func TestGetPath(t *testing.T) {
 	assert.Equal(t, expected, rec.Body.String())
 }
 
+func TestParseWebSocketProtocols(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, []string(nil), parseWebSocketProtocols(""))
+	assert.Equal(t, []string(nil), parseWebSocketProtocols("   "))
+	assert.Equal(t, []string{"foo"}, parseWebSocketProtocols("foo"))
+	assert.Equal(t, []string{"foo", "bar"}, parseWebSocketProtocols("foo, bar"))
+	assert.Equal(t, []string{"foo", "bar"}, parseWebSocketProtocols("foo, , bar,   "))
+}
+
 func doRequest(t testWebSessionImpl, req *http.Request) *httptest.ResponseRecorder {
 	client := websession.WebSession_ServerToClient(t)
 	defer client.Release()
