@@ -14,6 +14,7 @@ import (
 	"capnproto.org/go/capnp/v3"
 	"capnproto.org/go/capnp/v3/flowcontrol"
 	"github.com/gobwas/ws"
+	"golang.org/x/exp/slog"
 	"sandstorm.org/go/tempest/capnp/util"
 	websession "sandstorm.org/go/tempest/capnp/web-session"
 	"sandstorm.org/go/tempest/pkg/exp/util/bytestream"
@@ -25,6 +26,7 @@ import (
 // HTTP 405 "Method Not Allowed" responses.
 type Handler struct {
 	Session websession.WebSession
+	Logger  *slog.Logger
 }
 
 // maxNonStreamingBodySize is the maximum size (in bytes) of a request body that we
@@ -98,26 +100,25 @@ func (h Handler) doWebsocket(w http.ResponseWriter, req *http.Request) {
 			return p.SetClientStream(streamPromise)
 		})
 	defer rel()
-	replyErr := func(err error) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
+	wsReplyErr := func(stage string, err error) {
+		replyErr(h.Logger, w, req, fmt.Errorf("websocket %s: %w", stage, err))
 		streamResolver.Reject(err)
 	}
 	res, err := fut.Struct()
 	if err != nil {
-		replyErr(err)
+		wsReplyErr("open session", err)
 		return
 	}
 	retProto, err := res.Protocol()
 	if err != nil {
-		replyErr(err)
+		wsReplyErr("read protocol response", err)
 		return
 	}
 	srvProto := make([]string, 0, retProto.Len())
 	for i := 0; i < retProto.Len(); i++ {
 		p, err := retProto.At(i)
 		if err != nil {
-			replyErr(err)
+			wsReplyErr("read protocol item", err)
 			return
 		}
 		srvProto = append(srvProto, p)
@@ -133,11 +134,11 @@ func (h Handler) doWebsocket(w http.ResponseWriter, req *http.Request) {
 		},
 	}.Upgrade(req, w)
 	if err != nil {
-		replyErr(err)
+		wsReplyErr("upgrade", err)
 		return
 	}
 	if err = bufRw.Flush(); err != nil {
-		replyErr(err)
+		wsReplyErr("flush", err)
 		return
 	}
 	stream := websession.WebSocketStream_ServerToClient(websocket.WriterStream{W: conn})
@@ -153,7 +154,7 @@ func (h Handler) doWebsocket(w http.ResponseWriter, req *http.Request) {
 func (h Handler) doPropfind(w http.ResponseWriter, req *http.Request) {
 	body, err := readNonStreamingBody(w, req)
 	if err != nil {
-		replyErr(w, fmt.Errorf("reading request body: %w", err))
+		replyErr(h.Logger, w, req, fmt.Errorf("reading request body: %w", err))
 		return
 	}
 
@@ -179,13 +180,13 @@ func (h Handler) doPropfind(w http.ResponseWriter, req *http.Request) {
 		return nil
 	})
 	defer rel()
-	relayResponse(w, req, fut, srv)
+	relayResponse(h.Logger, w, req, fut, srv)
 }
 
 func (h Handler) doProppatch(w http.ResponseWriter, req *http.Request) {
 	body, err := readNonStreamingBody(w, req)
 	if err != nil {
-		replyErr(w, fmt.Errorf("reading request body: %w", err))
+		replyErr(h.Logger, w, req, fmt.Errorf("reading request body: %w", err))
 		return
 	}
 	srv, client := makeResponseStream(w)
@@ -197,7 +198,7 @@ func (h Handler) doProppatch(w http.ResponseWriter, req *http.Request) {
 		return p.SetXmlContent(string(body))
 	})
 	defer rel()
-	relayResponse(w, req, fut, srv)
+	relayResponse(h.Logger, w, req, fut, srv)
 }
 
 func davDestination(req *http.Request) (string, error) {
@@ -226,7 +227,7 @@ func davDestination(req *http.Request) (string, error) {
 func (h Handler) doMove(w http.ResponseWriter, req *http.Request) {
 	dest, err := davDestination(req)
 	if err != nil {
-		replyErr(w, err)
+		replyErr(h.Logger, w, req, err)
 		return
 	}
 	srv, client := makeResponseStream(w)
@@ -241,13 +242,13 @@ func (h Handler) doMove(w http.ResponseWriter, req *http.Request) {
 		return nil
 	})
 	defer rel()
-	relayResponse(w, req, fut, srv)
+	relayResponse(h.Logger, w, req, fut, srv)
 }
 
 func (h Handler) doCopy(w http.ResponseWriter, req *http.Request) {
 	dest, err := davDestination(req)
 	if err != nil {
-		replyErr(w, err)
+		replyErr(h.Logger, w, req, err)
 		return
 	}
 	srv, client := makeResponseStream(w)
@@ -263,7 +264,7 @@ func (h Handler) doCopy(w http.ResponseWriter, req *http.Request) {
 		return nil
 	})
 	defer rel()
-	relayResponse(w, req, fut, srv)
+	relayResponse(h.Logger, w, req, fut, srv)
 }
 
 // placePathContext fills in the path and context fields of p based on the other arguments.
@@ -304,7 +305,7 @@ func (h Handler) doGet(w http.ResponseWriter, req *http.Request, ignoreBody bool
 		return placePathContext(p, req, client)
 	})
 	defer rel()
-	relayResponse(w, req, respFut, srv)
+	relayResponse(h.Logger, w, req, respFut, srv)
 }
 
 // doDelete makes a request using the WebSession.delete() method.
@@ -314,16 +315,16 @@ func (h Handler) doDelete(w http.ResponseWriter, req *http.Request) {
 		return placePathContext(p, req, client)
 	})
 	defer rel()
-	relayResponse(w, req, respFut, srv)
+	relayResponse(h.Logger, w, req, respFut, srv)
 }
 
 // Handle a streaming post or put request.
 func (h Handler) doStreamingPostLike(w http.ResponseWriter, req *http.Request) {
 	switch req.Method {
 	case "POST":
-		callStreamingPostLike(h.Session.PostStreaming, w, req)
+		callStreamingPostLike(h.Logger, h.Session.PostStreaming, w, req)
 	case "PUT":
-		callStreamingPostLike(h.Session.PutStreaming, w, req)
+		callStreamingPostLike(h.Logger, h.Session.PutStreaming, w, req)
 	}
 }
 
@@ -331,20 +332,20 @@ func (h Handler) doStreamingPostLike(w http.ResponseWriter, req *http.Request) {
 func (h Handler) doNonStreamingPostLike(w http.ResponseWriter, req *http.Request) {
 	body, err := readNonStreamingBody(w, req)
 	if err != nil {
-		replyErr(w, fmt.Errorf("reading request body: %w", err))
+		replyErr(h.Logger, w, req, fmt.Errorf("reading request body: %w", err))
 		return
 	}
 	switch req.Method {
 	case "POST":
-		callNonStreamingPostLike(h.Session.Post, w, req, body)
+		callNonStreamingPostLike(h.Logger, h.Session.Post, w, req, body)
 	case "PUT":
-		callNonStreamingPostLike(h.Session.Put, w, req, body)
+		callNonStreamingPostLike(h.Logger, h.Session.Put, w, req, body)
 	case "PATCH":
-		callNonStreamingPostLike(h.Session.Patch, w, req, body)
+		callNonStreamingPostLike(h.Logger, h.Session.Patch, w, req, body)
 	case "MKCOL":
-		callNonStreamingPostLike(h.Session.Mkcol, w, req, body)
+		callNonStreamingPostLike(h.Logger, h.Session.Mkcol, w, req, body)
 	case "REPORT":
-		callNonStreamingPostLike(h.Session.Report, w, req, body)
+		callNonStreamingPostLike(h.Logger, h.Session.Report, w, req, body)
 	}
 }
 
@@ -376,6 +377,7 @@ func readNonStreamingBody(w http.ResponseWriter, req *http.Request) ([]byte, err
 }
 
 func callStreamingPostLike[Params streamingPostLikeParams, Results_Future streamingPostLikeResults_Future](
+	lg *slog.Logger,
 	call func(context.Context, func(Params) error) (Results_Future, capnp.ReleaseFunc),
 	w http.ResponseWriter,
 	req *http.Request,
@@ -401,13 +403,14 @@ func callStreamingPostLike[Params streamingPostLikeParams, Results_Future stream
 		}
 	}()
 	defer rel()
-	relayResponse(w, req, respFut, srv)
+	relayResponse(lg, w, req, respFut, srv)
 }
 
 // Invoke a non-streaming post-like method with arguments based on req and body, and marshal
 // the response into w. call should be a method on a WebSession with a suitable argument
 // & return type.
 func callNonStreamingPostLike[Params nonStreamingPostLikeParams](
+	lg *slog.Logger,
 	call func(context.Context, func(Params) error) (websession.Response_Future, capnp.ReleaseFunc),
 	w http.ResponseWriter,
 	req *http.Request,
@@ -425,7 +428,7 @@ func callNonStreamingPostLike[Params nonStreamingPostLikeParams](
 		return placePathContext(p, req, client)
 	})
 	defer rel()
-	relayResponse(w, req, respFut, srv)
+	relayResponse(lg, w, req, respFut, srv)
 }
 
 // nonStreamingPostLikeParams captures common arguments for WebSession.post, put, and patch.
@@ -482,6 +485,7 @@ func placeRequestContent(
 // responseStream should be the value of websession.Context.responseStream that was passed in
 // to the request.
 func relayResponse(
+	lg *slog.Logger,
 	w http.ResponseWriter,
 	req *http.Request,
 	respFut websession.Response_Future,
@@ -489,13 +493,13 @@ func relayResponse(
 ) {
 	resp, err := respFut.Struct()
 	if err != nil {
-		replyErr(w, err)
+		replyErr(lg, w, req, err)
 		return
 	}
 
 	status, err := responseStatus(req, resp)
 	if err != nil {
-		replyErr(w, err)
+		replyErr(lg, w, req, err)
 		close(responseStream.ready)
 		return
 	}
@@ -516,7 +520,7 @@ func relayResponse(
 				}
 			}
 			if err := populateResponseHeaders(w, req, resp); err != nil {
-				replyErr(w, err)
+				replyErr(lg, w, req, err)
 				return
 			}
 			w.WriteHeader(status)
@@ -532,12 +536,12 @@ func relayResponse(
 
 	close(responseStream.ready)
 	if err := populateResponseHeaders(w, req, resp); err != nil {
-		replyErr(w, err)
+		replyErr(lg, w, req, err)
 		return
 	}
 	data, err := responseBodyBytes(resp)
 	if err != nil {
-		replyErr(w, err)
+		replyErr(lg, w, req, err)
 		return
 	}
 	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
@@ -847,7 +851,7 @@ type hasContent interface {
 
 // replyErr responds to the request with a 500 status and the given error. If any headers had been
 // set in the response, they will be cleared.
-func replyErr(w http.ResponseWriter, err error) {
+func replyErr(lg *slog.Logger, w http.ResponseWriter, req *http.Request, err error) {
 	hdr := w.Header()
 
 	// Delete any headers we may have set when trying to build a normal response.
@@ -862,6 +866,16 @@ func replyErr(w http.ResponseWriter, err error) {
 
 	w.WriteHeader(http.StatusInternalServerError)
 	w.Write([]byte(err.Error()))
+	if lg != nil {
+		lg.Error(
+			"websession request failed",
+			"error", err,
+			"method", req.Method,
+			"host", req.Host,
+			"path", req.URL.Path,
+			"query", req.URL.RawQuery,
+		)
+	}
 }
 
 // placeContext populates a websession context based on the request, using the supplied

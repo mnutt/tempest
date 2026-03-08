@@ -3,12 +3,14 @@ package servermain
 import (
 	"net/http"
 
+	"golang.org/x/exp/slog"
 	websessioncp "sandstorm.org/go/tempest/capnp/web-session"
 	"sandstorm.org/go/tempest/pkg/exp/websession"
 )
 
 func ServeApp(
 	webSession websessioncp.WebSession,
+	lg *slog.Logger,
 	w http.ResponseWriter,
 	req *http.Request,
 	rootHost string,
@@ -25,6 +27,7 @@ func ServeApp(
 
 	websession.Handler{
 		Session: webSession,
+		Logger:  lg,
 	}.ServeHTTP(w, req)
 }
 
@@ -34,16 +37,16 @@ func ServeApp(
 //
 // Note the following:
 //
-// - Currently there are still exceptions for images and media, as these have
-//   some legitimate use cases (e.g. embedding images in feeds in ttrss) and
-//   we want to provide a way for a user to allow these via the UI before we
-//   block them by default
-// - The unsafe-* directives are currently necessary to avoid breaking many
-//   apps. They make CSP not particularly useful in mitating XSS attacks,
-//   but do not present an information-leaking hazard.
-// - In the future, we should provide a way for apps to opt-in to more
-//   restrictive policies, as a useful mitigation for things like XSS vulns.
-//   in the apps.
+//   - Currently there are still exceptions for images and media, as these have
+//     some legitimate use cases (e.g. embedding images in feeds in ttrss) and
+//     we want to provide a way for a user to allow these via the UI before we
+//     block them by default
+//   - The unsafe-* directives are currently necessary to avoid breaking many
+//     apps. They make CSP not particularly useful in mitating XSS attacks,
+//     but do not present an information-leaking hazard.
+//   - In the future, we should provide a way for apps to opt-in to more
+//     restrictive policies, as a useful mitigation for things like XSS vulns.
+//     in the apps.
 func uiContentSecurityPolicy(isSecure bool, rootHost string) string {
 	const unsafe = "'unsafe-inline' 'unsafe-eval' data: blob:; "
 	rootHttpHost := "http"

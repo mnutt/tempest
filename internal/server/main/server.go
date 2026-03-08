@@ -1,9 +1,14 @@
 package servermain
 
 import (
+	"bufio"
 	"context"
+	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	"capnproto.org/go/capnp/v3"
 	"capnproto.org/go/capnp/v3/pogs"
@@ -20,6 +25,7 @@ import (
 	"sandstorm.org/go/tempest/internal/server/container"
 	"sandstorm.org/go/tempest/internal/server/database"
 	"sandstorm.org/go/tempest/internal/server/embed"
+	"sandstorm.org/go/tempest/internal/server/logging"
 	"sandstorm.org/go/tempest/internal/server/session"
 	"zenhack.net/go/util/orerr"
 	"zenhack.net/go/util/sync/mutex"
@@ -177,7 +183,7 @@ func (s *server) Handler() http.Handler {
 					return
 				}
 				defer session.Release()
-				ServeApp(session, w, req, s.cfg.HTTP.RootDomain)
+				ServeApp(session, s.log, w, req, s.cfg.HTTP.RootDomain)
 			}
 		})
 
@@ -314,7 +320,82 @@ func (s *server) Handler() http.Handler {
 
 	r.Host(s.cfg.HTTP.RootDomain).Handler(http.FileServer(http.FS(embed.Content)))
 
-	return r
+	return requestLoggingMiddleware(s.log, r)
+}
+
+func requestLoggingMiddleware(lg *slog.Logger, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		start := time.Now()
+		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(rec, req)
+		logArgs := []any{
+			"method", req.Method,
+			"host", req.Host,
+			"path", req.URL.Path,
+			"query", req.URL.RawQuery,
+			"status", rec.status,
+			"bytes", rec.bytes,
+			"duration", time.Since(start),
+			"remote-addr", req.RemoteAddr,
+		}
+		switch {
+		case rec.status >= 500:
+			lg.Error("http request failed", logArgs...)
+		case rec.status >= 400:
+			lg.Debug("http request client error", logArgs...)
+		default:
+			lg.Log(req.Context(), logging.LevelTrace, "http request", logArgs...)
+		}
+	})
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+	bytes  int
+}
+
+func (r *statusRecorder) WriteHeader(status int) {
+	r.status = status
+	r.ResponseWriter.WriteHeader(status)
+}
+
+func (r *statusRecorder) Write(b []byte) (int, error) {
+	n, err := r.ResponseWriter.Write(b)
+	r.bytes += n
+	return n, err
+}
+
+func (r *statusRecorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (r *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := r.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, fmt.Errorf("response writer does not support hijacking")
+	}
+	return h.Hijack()
+}
+
+func (r *statusRecorder) ReadFrom(src io.Reader) (int64, error) {
+	if rf, ok := r.ResponseWriter.(io.ReaderFrom); ok {
+		n, err := rf.ReadFrom(src)
+		r.bytes += int(n)
+		return n, err
+	}
+	n, err := io.Copy(r.ResponseWriter, src)
+	r.bytes += int(n)
+	return n, err
+}
+
+func (r *statusRecorder) Push(target string, opts *http.PushOptions) error {
+	if p, ok := r.ResponseWriter.(http.Pusher); ok {
+		return p.Push(target, opts)
+	}
+	return http.ErrNotSupported
 }
 
 func (s *server) getWebSession(ctx context.Context, wsp webSessionParams, sess session.GrainSession) (websession.WebSession, error) {
